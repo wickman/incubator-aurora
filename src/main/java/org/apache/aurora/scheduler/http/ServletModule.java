@@ -66,8 +66,7 @@ public class ServletModule extends AbstractModule {
 
     // Bindings required for the leader redirector.
     requireBinding(LocalServiceRegistry.class);
-    requireBinding(Key.get(new TypeLiteral<DynamicHostSet<ServiceInstance>>() {
-    }));
+    requireBinding(Key.get(new TypeLiteral<DynamicHostSet<ServiceInstance>>() { }));
     Registration.registerServletFilter(binder(), GuiceFilter.class, "/*");
     install(new JerseyServletModule() {
       private void registerJerseyEndpoint(String indexPath, Class<?>... servlets) {
@@ -149,7 +148,6 @@ public class ServletModule extends AbstractModule {
 
     registerUIClient();
 
-
     bind(LeaderRedirect.class).in(Singleton.class);
     LifecycleModule.bindStartupAction(binder(), RedirectMonitor.class);
   }
@@ -175,7 +173,7 @@ public class ServletModule extends AbstractModule {
   }
 
   /**
-   * A function to handle all assets related to the new UI client.
+   * A function to handle all assets related to the UI client.
    */
   private void registerUIClient() {
     registerAsset("ui/home.html", "/ui/home.html");
