@@ -66,7 +66,8 @@ public class ServletModule extends AbstractModule {
 
     // Bindings required for the leader redirector.
     requireBinding(LocalServiceRegistry.class);
-    requireBinding(Key.get(new TypeLiteral<DynamicHostSet<ServiceInstance>>() { }));
+    requireBinding(Key.get(new TypeLiteral<DynamicHostSet<ServiceInstance>>() {
+    }));
     Registration.registerServletFilter(binder(), GuiceFilter.class, "/*");
     install(new JerseyServletModule() {
       private void registerJerseyEndpoint(String indexPath, Class<?>... servlets) {
@@ -146,6 +147,9 @@ public class ServletModule extends AbstractModule {
         "assets/datatables/js/dataTables.htmlNumberType.js",
         "/js/dataTables.htmlNumberType.js");
 
+    registerUIClient();
+
+
     bind(LeaderRedirect.class).in(Singleton.class);
     LifecycleModule.bindStartupAction(binder(), RedirectMonitor.class);
   }
@@ -168,6 +172,13 @@ public class ServletModule extends AbstractModule {
     registerAsset(BOOTSTRAP_PATH + "img/glyphicons-halflings.png",
         "/img/glyphicons-halflings.png",
         false);
+  }
+
+  /**
+   * A function to handle all assets related to the new UI client.
+   */
+  private void registerUIClient() {
+    registerAsset("ui/home.html", "/ui/home.html");
   }
 
   private void registerAsset(String resourceLocation, String registerLocation) {
