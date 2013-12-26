@@ -3,6 +3,7 @@
 /* Controllers */
 
 angular.module('auroraUI.controllers', []).
-  controller('MyCtrl1', [function() {
-
-  }]);
+  controller('AuroraUI.JobSummaryController',
+    function($scope) {
+      $scope.summary = 'Hello World!';
+  });
