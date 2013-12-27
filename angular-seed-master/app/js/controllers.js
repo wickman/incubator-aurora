@@ -50,6 +50,7 @@ angular.module('auroraUI.controllers', []).
         showFooter: true,
         enableCellSelection: false,
         enableRowSelection: false,
-        filterOptions: 'filterOptions'
+        filterOptions: 'filterOptions',
+        showFilter: true
       };
     });
