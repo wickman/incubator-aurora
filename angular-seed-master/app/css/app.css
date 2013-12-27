@@ -32,3 +32,10 @@
 [ng\:cloak], [ng-cloak], [data-ng-cloak], [x-ng-cloak], .ng-cloak, .x-ng-cloak {
   display: none !important;
 }
+
+/*style.css*/
+.gridStyle {
+  border: 1px solid rgb(212,212,212);
+  min-width: 400px;
+  min-height: 300px
+}

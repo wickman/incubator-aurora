@@ -20,6 +20,8 @@ angular.module('auroraUI.controllers', []).
         }
       ]};
 
+      $scope.jobsummaries = $scope.jobSummary.jobSummaries;
+
       $scope.columnCollection = [
         {label : 'role', map: 'role'},
         {label : 'jobs', map: 'jobs'},
@@ -30,5 +32,24 @@ angular.module('auroraUI.controllers', []).
 
       $scope.globalConfig = {
         isGlobalSearchActivated: true
+      };
+
+      $scope.filterOptions = {
+        filterText: "",
+        useExternalFilter: false
+      };
+
+      $scope.gridOptions = {
+        data: 'jobsummaries',
+        enablePaging: true,
+        pagingOptions: {
+          pageSizes: [10, 25, 50, 1000],
+          pageSize: 1,
+          currentPage: 1
+        },
+        showFooter: true,
+        enableCellSelection: false,
+        enableRowSelection: false,
+        filterOptions: 'filterOptions'
       };
     });
