@@ -6,6 +6,7 @@ angular.module('auroraUI.controllers', []).
     controller('AuroraUI.JobSummaryController',
     function ($scope) {
       $scope.title = 'Scheduled Jobs Summary';
+
       $scope.jobSummary = { 'jobSummaries': [
         {
           'role': 'mesos',
@@ -18,10 +19,16 @@ angular.module('auroraUI.controllers', []).
           'cronJobs': 20
         }
       ]};
+
       $scope.columnCollection = [
         {label : 'role', map: 'role'},
         {label : 'jobs', map: 'jobs'},
         {label : 'cronJobs', map: 'cronJobs'}
       ];
+
       $scope.rowCollection = $scope.jobSummary.jobSummaries;
+
+      $scope.globalConfig = {
+        isGlobalSearchActivated: true
+      };
     });

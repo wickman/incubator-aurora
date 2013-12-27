@@ -35,7 +35,8 @@
 
   <div class='page-header' ng-controller='AuroraUI.JobSummaryController'>
     <h2>{{title}}</h2>
-    <smart-table columns="columnCollection" rows="rowCollection"></smart-table>
+    <smart-table config="globalConfig" columns="columnCollection" rows="rowCollection">
+    </smart-table>
   </div>
 
   <!-- Scripts -->
@@ -50,6 +51,6 @@
 
   <!--smart table-->
   <script src="lib/smart-table/Smart-Table.min.js"></script>
-  <link href="lib/smart-table/app.css" rel="stylesheet">
+  <link href="lib/smart-table/table.css" rel="stylesheet">
 </body>
 </html>
