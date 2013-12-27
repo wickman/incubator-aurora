@@ -21,14 +21,19 @@ angular.module('auroraUI.controllers', []).
       ]};
 
       $scope.columnCollection = [
-        {label : 'role', map: 'role'},
-        {label : 'jobs', map: 'jobs'},
-        {label : 'cronJobs', map: 'cronJobs'}
+        {label : 'Role', map: 'role', cellTemplateUrl: 'roleLink.html'},
+        {label : 'Jobs', map: 'jobs'},
+        {label : 'Cron Jobs', map: 'cronJobs'}
       ];
 
       $scope.rowCollection = $scope.jobSummary.jobSummaries;
 
       $scope.globalConfig = {
-        isGlobalSearchActivated: true
+        isGlobalSearchActivated: true,
+        selectionMode: 'single'
       };
-   });
+
+      $scope.$on('selectionChange', function (event, args) {
+        console.log(args);
+      });
+    });
