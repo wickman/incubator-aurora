@@ -41,4 +41,11 @@ angular.module('auroraUI.controllers', []).
         filterOptions: 'filterOptions',
         showFilter: true
       };
+
+      // TODO: ng-Grid improvements:
+      // Fix the search box location in the grid.
+      // Fix the pagination display style..
+      // Show all in page size display.
+      // header instead of footer.
+      // Order of pagination.
     });
