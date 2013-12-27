@@ -22,6 +22,18 @@ angular.module('auroraUI.controllers', []).
 
       $scope.jobsummaries = $scope.jobSummary.jobSummaries;
 
+      $scope.columnCollection = [
+        {label : 'role', map: 'role'},
+        {label : 'jobs', map: 'jobs'},
+        {label : 'cronJobs', map: 'cronJobs'}
+      ];
+
+      $scope.rowCollection = $scope.jobSummary.jobSummaries;
+
+      $scope.globalConfig = {
+        isGlobalSearchActivated: true
+      };
+
       $scope.filterOptions = {
         filterText: "",
         useExternalFilter: false

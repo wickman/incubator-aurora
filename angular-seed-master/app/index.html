@@ -35,6 +35,8 @@
 
   <div class='page-header' ng-controller='AuroraUI.JobSummaryController'>
     <h2>{{title}}</h2>
+    <smart-table config="globalConfig" columns="columnCollection" rows="rowCollection">
+    </smart-table>
     <div class='gridStyle' ng-grid='gridOptions'> </div>
   </div>
 
@@ -48,6 +50,10 @@
   <script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
   <script src="//netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script>
   <link href="//netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" rel="stylesheet">
+
+  <!--smart table-->
+  <script src="lib/smart-table/Smart-Table.min.js"></script>
+  <link href="lib/smart-table/table.css" rel="stylesheet">
 
   <!-- ng-grid -->
   <link rel="stylesheet" type="text/css" href="lib/ng-grid/ng-grid.css" />
