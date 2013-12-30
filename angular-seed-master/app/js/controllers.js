@@ -30,6 +30,9 @@ angular.module('auroraUI.controllers', []).
 
       $scope.globalConfig = {
         isGlobalSearchActivated: true,
+        isPaginationEnabled: true,
+        itemsByPage: 25,
+        maxSize: 8,
         selectionMode: 'single'
       };
 
