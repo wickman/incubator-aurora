@@ -4,21 +4,8 @@
 
 angular.module('auroraUI.controllers', []).
     controller('AuroraUI.JobSummaryController',
-    function ($scope, $window) {
+    function ($scope, $window, auroraClient) {
       $scope.title = 'Scheduled Jobs Summary';
-
-      $scope.jobSummary = { 'jobSummaries': [
-        {
-          'role': "mesos",
-          'jobs': 10,
-          'cronJobs': 10
-        },
-        {
-          'role': 'ads',
-          'jobs': 101,
-          'cronJobs': 20
-        }
-      ]};
 
       $scope.columnCollection = [
         {label : 'Role', map: 'role', cellTemplateUrl: 'roleLink.html'},
@@ -26,7 +13,7 @@ angular.module('auroraUI.controllers', []).
         {label : 'Cron Jobs', map: 'cronJobs'}
       ];
 
-      $scope.rowCollection = $scope.jobSummary.jobSummaries;
+      $scope.rowCollection = auroraClient.jobSummary.jobSummaries;
 
       $scope.globalConfig = {
         isGlobalSearchActivated: true,
