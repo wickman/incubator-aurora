@@ -3,7 +3,7 @@
 /* Controllers */
 
 angular.module('auroraUI.controllers', []).
-    controller('AuroraUI.JobSummaryController',
+    controller('JobSummaryController',
     function ($scope, $window, auroraClient) {
       $scope.title = 'Scheduled Jobs Summary';
 
@@ -24,6 +24,6 @@ angular.module('auroraUI.controllers', []).
       };
 
       $scope.$on('selectionChange', function (event, args) {
-        $window.location.href = args.item.role;
+        $window.location.href = "/scheduler/" + args.item.role;
       });
    });

@@ -89,8 +89,7 @@ public class ServletModule extends AbstractModule {
         registerJerseyEndpoint("/pendingtasks", PendingTasks.class);
         registerJerseyEndpoint("/quotas", Quotas.class);
         registerJerseyEndpoint(
-            "/scheduler",
-            SchedulerzHome.class,
+            "/scheduler/",
             SchedulerzRole.class,
             SchedulerzJob.class);
         registerJerseyEndpoint("/slaves", Slaves.class);
@@ -183,8 +182,8 @@ public class ServletModule extends AbstractModule {
     registerAsset("api_types.js", "/js/apiTypes.js", false);
     registerAsset("thrift.js", "/js/thrift.js", false);
 
-    registerAsset("ui/index.html", "/ui/index.html");
-    registerAsset("ui/roleLink.html", "/ui/roleLink.html");
+    registerAsset("ui/index.html", "/scheduler");
+    registerAsset("ui/roleLink.html", "/roleLink.html");
 
     registerAsset("ui/css/app.css", "/css/app.css");
 
@@ -207,7 +206,7 @@ public class ServletModule extends AbstractModule {
   }
 
   private void registerAsset(String resourceLocation, String registerLocation, boolean isRelative) {
-    String mediaType = getMediaType(registerLocation).toString();
+    String mediaType = getMediaType(resourceLocation).toString();
 
     if (isRelative) {
       Registration.registerHttpAsset(

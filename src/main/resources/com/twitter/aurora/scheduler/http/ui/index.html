@@ -2,14 +2,13 @@
 <html lang="en" ng-app="auroraUI">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Aurora UI</title>
   <link rel="stylesheet" href="/css/app.css"/>
 </head>
 <body class='ng-cloak'>
 
 <div class='container'>
-  <div ng-controller='AuroraUI.JobSummaryController'>
+  <div ng-controller='JobSummaryController'>
     <div class='page-header'>
       <h2 class="text-center">{{title}}</h2>
     </div>
@@ -22,9 +21,13 @@
 </div>
 
 <!-- Scripts -->
+
+<!-- Thrift -->
 <script src="/js/thrift.js"></script>
 <script src="/js/apiTypes.js"></script>
 <script src="/js/readOnlyScheduler.js"></script>
+
+<!-- Angular -->
 <script src="/js/angular.js"></script>
 <script src="/js/app.js"></script>
 <script src="/js/controllers.js"></script>
