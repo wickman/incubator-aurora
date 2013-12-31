@@ -13,7 +13,7 @@ angular.module('auroraUI.controllers', []).
         {label : 'Cron Jobs', map: 'cronJobs'}
       ];
 
-      $scope.rowCollection = auroraClient.jobSummary.jobSummaries;
+      $scope.rowCollection = auroraClient.getJobSummary().jobSummaries;
 
       $scope.globalConfig = {
         isGlobalSearchActivated: true,
