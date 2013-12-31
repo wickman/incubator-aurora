@@ -176,7 +176,26 @@ public class ServletModule extends AbstractModule {
    * A function to handle all assets related to the UI client.
    */
   private void registerUIClient() {
-    registerAsset("ui/home.html", "/ui/home.html");
+    registerAngular();
+    registerSmartTable();
+
+    registerAsset("ui/index.html", "/ui/index.html");
+    registerAsset("ui/roleLink.html", "/ui/roleLink.html");
+
+    registerAsset("ui/css/app.css", "/css/app.css");
+
+    registerAsset("ui/js/app.js", "/js/app.js");
+    registerAsset("ui/js/controllers.js", "/js/controllers.js");
+    registerAsset("ui/js/directives.js", "/js/directives.js");
+    registerAsset("ui/js/services.js", "/js/services.js");
+  }
+
+  private void registerSmartTable() {
+    registerAsset("bower_components/smart-table/Smart-Table.debug.js", "/js/smartTable.js", false);
+  }
+
+  private void registerAngular() {
+    registerAsset("bower_components/angular/angular.js", "/js/angular.js", false);
   }
 
   private void registerAsset(String resourceLocation, String registerLocation) {
