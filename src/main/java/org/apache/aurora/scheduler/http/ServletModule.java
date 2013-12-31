@@ -179,6 +179,10 @@ public class ServletModule extends AbstractModule {
     registerAngular();
     registerSmartTable();
 
+    registerAsset("ReadOnlyScheduler.js", "/js/readOnlyScheduler.js", false);
+    registerAsset("api_types.js", "/js/apiTypes.js", false);
+    registerAsset("thrift.js", "/js/thrift.js", false);
+
     registerAsset("ui/index.html", "/ui/index.html");
     registerAsset("ui/roleLink.html", "/ui/roleLink.html");
 

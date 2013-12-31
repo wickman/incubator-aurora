@@ -9,11 +9,11 @@ angular.module('auroraUI.controllers', []).
 
       $scope.columnCollection = [
         {label : 'Role', map: 'role', cellTemplateUrl: 'roleLink.html'},
-        {label : 'Jobs', map: 'jobs'},
-        {label : 'Cron Jobs', map: 'cronJobs'}
+        {label : 'Jobs', map: 'jobCount'},
+        {label : 'Cron Jobs', map: 'cronJobCount'}
       ];
 
-      $scope.rowCollection = auroraClient.getJobSummary().jobSummaries;
+      $scope.rowCollection = auroraClient.getJobSummary().summaries;
 
       $scope.globalConfig = {
         isGlobalSearchActivated: true,
@@ -26,4 +26,4 @@ angular.module('auroraUI.controllers', []).
       $scope.$on('selectionChange', function (event, args) {
         $window.location.href = args.item.role;
       });
-    });
+   });
