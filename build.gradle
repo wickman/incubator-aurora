@@ -203,20 +203,16 @@ task generateSources(dependsOn: 'bootstrapThrift') {
   inputs.file inputFiles
   outputs.dir outputDir
   doFirst {
-    // Generate Java thrift files.
+    // Generate Java and Javascript thrift files.
     outputDir.exists() || outputDir.mkdirs()
     inputFiles.each { File file ->
       exec {
         executable = thriftBinary
         args = ['--gen', 'java:hashcode', '-o', outputDir, file]
       }
-    }
-
-    // Generate JS thrift files
-    inputFiles.each { File file ->
       exec {
-          executable = thriftBinary
-          args = ['--gen', 'js', '-o', outputDir, file]
+        executable = thriftBinary
+        args = ['--gen', 'js', '-o', outputDir, file]
       }
     }
 
