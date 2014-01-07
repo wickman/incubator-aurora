@@ -208,11 +208,7 @@ task generateSources(dependsOn: 'bootstrapThrift') {
     inputFiles.each { File file ->
       exec {
         executable = thriftBinary
-        args = ['--gen', 'java:hashcode', '-o', outputDir, file]
-      }
-      exec {
-        executable = thriftBinary
-        args = ['--gen', 'js', '-o', outputDir, file]
+        args = ['--gen', 'java:hashcode', '--gen', 'js', '-o', outputDir, file]
       }
     }
 
