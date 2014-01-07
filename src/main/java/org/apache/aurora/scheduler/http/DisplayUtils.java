@@ -17,13 +17,13 @@ package org.apache.aurora.scheduler.http;
 
 import com.google.common.base.Function;
 import com.google.common.collect.Ordering;
-import com.twitter.common.args.Arg;
-import com.twitter.common.args.CmdLine;
 
 import org.apache.aurora.scheduler.MesosTaskFactory.MesosTaskFactoryImpl;
-import org.apache.aurora.scheduler.http.SchedulerzHome.Role;
 import org.apache.aurora.scheduler.http.SchedulerzRole.Job;
 import org.apache.aurora.scheduler.storage.entities.IJobKey;
+
+import com.twitter.common.args.Arg;
+import com.twitter.common.args.CmdLine;
 
 /**
  * Utility class to hold common display helper functions.
@@ -36,13 +36,6 @@ public final class DisplayUtils {
   private DisplayUtils() {
     // Utility class.
   }
-
-  static final Ordering<Role> ROLE_ORDERING = Ordering.natural().onResultOf(
-      new Function<Role, String>() {
-        @Override public String apply(Role role) {
-          return role.getRole();
-        }
-      });
 
   static final Ordering<Job> JOB_ORDERING = Ordering.natural().onResultOf(
       new Function<Job, String>() {
