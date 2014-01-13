@@ -203,7 +203,6 @@ task generateSources(dependsOn: 'bootstrapThrift') {
   inputs.file inputFiles
   outputs.dir outputDir
   doFirst {
-    // Generate Java and Javascript thrift files.
     outputDir.exists() || outputDir.mkdirs()
     inputFiles.each { File file ->
       exec {
@@ -211,7 +210,6 @@ task generateSources(dependsOn: 'bootstrapThrift') {
         args = ['--gen', 'java:hashcode', '--gen', 'js', '-o', outputDir, file]
       }
     }
-
     // These are the 'root' structs, the tool recursively generates all composed structs.
     // TODO(wfarner): Change codegen tool to generate for all structs in a thrift file.
     ['JobConfiguration', 'Lock', 'ScheduledTask', 'Quota'].each {
