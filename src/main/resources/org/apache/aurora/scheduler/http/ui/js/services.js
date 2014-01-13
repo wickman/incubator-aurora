@@ -2,7 +2,7 @@
 
 auroraUI.factory(
   'auroraClient',
-  function (auroraClientMock) {
+  function () {
     return {
       getJobSummary: function () {
         var client = this.makeSchedulerClient();
@@ -20,20 +20,5 @@ auroraUI.factory(
         return new ReadOnlySchedulerClient(protocol);
       }
     };
-  }
-);
-
-auroraUI.factory(
-  'auroraClientMock',
-  function () {
-    return {
-      getJobSummary: function () {
-        var summary = new JobSummary();
-        summary.role = "mesos";
-        summary.jobCount = 10;
-        summary.cronJobCount = 10;
-        return { 'summaries': [summary]};
-      }
-    }
   }
 );
