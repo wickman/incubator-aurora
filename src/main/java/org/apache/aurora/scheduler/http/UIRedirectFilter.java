@@ -25,7 +25,8 @@ import javax.servlet.http.HttpServletResponse;
 import com.twitter.common.net.http.filters.AbstractHttpFilter;
 
 /**
- * A filter that maps string template servlet paths to UI client pages.
+ * A filter that maps string template servlet paths to UI client pages. This is needed because
+ * AngularJS's resource loader is confused when there is a trailing / at the end of URL's.
  */
 public class UIRedirectFilter extends AbstractHttpFilter {
 

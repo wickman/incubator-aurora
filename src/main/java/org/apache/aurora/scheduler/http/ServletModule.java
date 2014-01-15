@@ -31,7 +31,6 @@ import com.google.inject.servlet.GuiceFilter;
 import com.sun.jersey.api.container.filter.GZIPContentEncodingFilter;
 import com.sun.jersey.guice.JerseyServletModule;
 import com.sun.jersey.guice.spi.container.servlet.GuiceContainer;
-
 import com.twitter.common.application.http.Registration;
 import com.twitter.common.application.modules.LifecycleModule;
 import com.twitter.common.application.modules.LocalServiceRegistry;
@@ -82,6 +81,9 @@ public class ServletModule extends AbstractModule {
       @Override protected void configureServlets() {
         bind(HttpStatsFilter.class).in(Singleton.class);
         filter("/scheduler*").through(HttpStatsFilter.class);
+        // Servlets may assign a special meaning to trailing /, but this confuses AngularJS's
+        // resource loader. So, removing them for /scheduler* URLs using a UIRedirectFilter.
+        // TODO (skarumuri): Remove UIRedirectFilter when the /scheduler servlets are removed.
         bind(UIRedirectFilter.class).in(Singleton.class);
         filter("/scheduler*").through(UIRedirectFilter.class);
         bind(LeaderRedirectFilter.class).in(Singleton.class);
@@ -92,10 +94,7 @@ public class ServletModule extends AbstractModule {
         registerJerseyEndpoint("/offers", Offers.class);
         registerJerseyEndpoint("/pendingtasks", PendingTasks.class);
         registerJerseyEndpoint("/quotas", Quotas.class);
-        registerJerseyEndpoint(
-            "/scheduler/",
-            SchedulerzRole.class,
-            SchedulerzJob.class);
+        registerJerseyEndpoint("/scheduler/", SchedulerzRole.class, SchedulerzJob.class);
         registerJerseyEndpoint("/slaves", Slaves.class);
         registerJerseyEndpoint("/structdump", StructDump.class);
         registerJerseyEndpoint("/utilization", Utilization.class);
