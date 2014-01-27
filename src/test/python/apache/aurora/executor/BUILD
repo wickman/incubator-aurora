@@ -42,7 +42,6 @@ python_tests(name = 'gc_executor',
     pants('src/main/python/apache/aurora/executor:gc_executor'),
     pants('src/main/thrift/org/apache/aurora/gen:py-thrift'),
   ],
-  coverage = 'twitter.mesos.executor.gc_executor'
 )
 
 python_tests(name = 'executor_detector',
