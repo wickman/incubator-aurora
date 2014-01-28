@@ -17,6 +17,7 @@ package org.apache.aurora.scheduler.periodic;
 
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Logger;
@@ -25,6 +26,7 @@ import javax.inject.Inject;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
+import com.google.common.base.Throwables;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.Maps;
@@ -40,7 +42,9 @@ import org.apache.aurora.Protobufs;
 import org.apache.aurora.codec.ThriftBinaryCodec;
 import org.apache.aurora.codec.ThriftBinaryCodec.CodingException;
 import org.apache.aurora.gen.comm.AdjustRetainedTasks;
+import org.apache.aurora.scheduler.Driver;
 import org.apache.aurora.scheduler.TaskLauncher;
+import org.apache.aurora.scheduler.async.MappedFutures;
 import org.apache.aurora.scheduler.base.CommandUtil;
 import org.apache.aurora.scheduler.base.Query;
 import org.apache.aurora.scheduler.base.Tasks;
@@ -51,6 +55,7 @@ import org.apache.mesos.Protos.ExecutorID;
 import org.apache.mesos.Protos.ExecutorInfo;
 import org.apache.mesos.Protos.Offer;
 import org.apache.mesos.Protos.OfferID;
+import org.apache.mesos.Protos.SlaveID;
 import org.apache.mesos.Protos.TaskID;
 import org.apache.mesos.Protos.TaskInfo;
 import org.apache.mesos.Protos.TaskStatus;
@@ -63,8 +68,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
  */
 public class GcExecutorLauncher implements TaskLauncher {
   private static final Logger LOG = Logger.getLogger(GcExecutorLauncher.class.getName());
-
-  private final AtomicLong tasksCreated = Stats.exportLong("scheduler_gc_tasks_created");
 
   @VisibleForTesting
   static final Resources TOTAL_GC_EXECUTOR_RESOURCES =
@@ -81,36 +84,37 @@ public class GcExecutorLauncher implements TaskLauncher {
   private static final String SYSTEM_TASK_PREFIX = "system-gc-";
   private static final String EXECUTOR_NAME = "aurora.gc";
 
+  private final AtomicLong tasksCreated = Stats.exportLong("scheduler_gc_tasks_created");
+
   private final GcExecutorSettings settings;
   private final Storage storage;
   private final Clock clock;
   private final Cache<String, Long> pulses;
+  private final Driver driver;
+  private final MappedFutures<OfferID> pendingRuns;
 
   @Inject
   GcExecutorLauncher(
       GcExecutorSettings settings,
       Storage storage,
-      Clock clock) {
+      Clock clock,
+      ExecutorService executor,
+      Driver driver) {
 
     this.settings = checkNotNull(settings);
     this.storage = checkNotNull(storage);
     this.clock = checkNotNull(clock);
+    this.driver = checkNotNull(driver);
+    this.pendingRuns = new MappedFutures<>(executor);
 
     this.pulses = CacheBuilder.newBuilder()
         .expireAfterWrite(settings.getMaxGcInterval(), TimeUnit.MILLISECONDS)
         .build();
   }
 
-  @Override
-  public Optional<TaskInfo> createTask(Offer offer) {
-    if (!settings.getGcExecutorPath().isPresent()
-        || !Resources.from(offer).greaterThanOrEqual(TOTAL_GC_EXECUTOR_RESOURCES)
-        || isAlive(offer.getHostname())) {
-      return Optional.absent();
-    }
-
+  private TaskInfo makeGcTask(String hostName, SlaveID slaveId) {
     Set<IScheduledTask> tasksOnHost =
-        Storage.Util.weaklyConsistentFetchTasks(storage, Query.slaveScoped(offer.getHostname()));
+        Storage.Util.weaklyConsistentFetchTasks(storage, Query.slaveScoped(hostName));
     AdjustRetainedTasks message = new AdjustRetainedTasks()
         .setRetainedTasks(Maps.transformValues(Tasks.mapById(tasksOnHost), Tasks.GET_STATUS));
     byte[] data;
@@ -118,26 +122,51 @@ public class GcExecutorLauncher implements TaskLauncher {
       data = ThriftBinaryCodec.encode(message);
     } catch (CodingException e) {
       LOG.severe("Failed to encode retained tasks message: " + message);
-      return Optional.absent();
+      throw Throwables.propagate(e);
     }
 
     tasksCreated.incrementAndGet();
-    pulses.put(offer.getHostname(), clock.nowMillis() + settings.getDelayMs());
 
     ExecutorInfo.Builder executor = ExecutorInfo.newBuilder()
         .setExecutorId(ExecutorID.newBuilder().setValue(EXECUTOR_NAME))
         .setName(EXECUTOR_NAME)
-        .setSource(offer.getHostname())
+        .setSource(hostName)
         .addAllResources(GC_EXECUTOR_RESOURCES.toResourceList())
         .setCommand(CommandUtil.create(settings.getGcExecutorPath().get()));
 
-    return Optional.of(TaskInfo.newBuilder().setName("system-gc")
+    return TaskInfo.newBuilder().setName("system-gc")
         .setTaskId(TaskID.newBuilder().setValue(SYSTEM_TASK_PREFIX + UUID.randomUUID().toString()))
-        .setSlaveId(offer.getSlaveId())
+        .setSlaveId(slaveId)
         .setData(ByteString.copyFrom(data))
         .setExecutor(executor)
         .addAllResources(EPSILON.toResourceList())
-        .build());
+        .build();
+  }
+
+  private static boolean fitsInOffer(TaskInfo task, Offer offer) {
+    return Resources.from(offer).greaterThanOrEqual(Resources.from(task.getResourcesList()));
+  }
+
+  @Override
+  public boolean willUse(final Offer offer) {
+    if (!settings.getGcExecutorPath().isPresent()
+        || !Resources.from(offer).greaterThanOrEqual(TOTAL_GC_EXECUTOR_RESOURCES)
+        || isAlive(offer.getHostname())) {
+
+      return false;
+    }
+
+    return pendingRuns.submit(offer.getId(), new Runnable() {
+      @Override public void run() {
+        TaskInfo task = makeGcTask(offer.getHostname(), offer.getSlaveId());
+        if (fitsInOffer(task, offer)) {
+          driver.launchTask(offer.getId(), task);
+        } else {
+          LOG.warning("Insufficient resources to launch task " + task);
+        }
+        pulses.put(offer.getHostname(), clock.nowMillis() + settings.getDelayMs());
+      }
+    });
   }
 
   @Override
@@ -152,7 +181,7 @@ public class GcExecutorLauncher implements TaskLauncher {
 
   @Override
   public void cancelOffer(OfferID offer) {
-    // No-op.
+    pendingRuns.cancel(offer);
   }
 
   private boolean isAlive(String hostname) {

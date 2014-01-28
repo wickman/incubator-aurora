@@ -114,19 +114,19 @@ public class GcExecutorLauncherTest extends EasyMockTest {
     replayAndCreate();
 
     // First call - no items in the cache, no tasks collected.
-    Optional<TaskInfo> taskInfo = gcExecutorLauncher.createTask(OFFER);
+    Optional<TaskInfo> taskInfo = gcExecutorLauncher.willUse(OFFER);
     assertTrue(taskInfo.isPresent());
     assertRetainedTasks(taskInfo.get(), thermosPrunedTask, thermosTask, nonThermosTask);
     ExecutorInfo executor1 = taskInfo.get().getExecutor();
 
     // Second call - host item alive, no tasks collected.
     clock.advance(Amount.of(15L, Time.MINUTES));
-    taskInfo = gcExecutorLauncher.createTask(OFFER);
+    taskInfo = gcExecutorLauncher.willUse(OFFER);
     assertFalse(taskInfo.isPresent());
 
     // Third call - two tasks collected.
     clock.advance(Amount.of(15L, Time.MINUTES));
-    taskInfo = gcExecutorLauncher.createTask(OFFER);
+    taskInfo = gcExecutorLauncher.willUse(OFFER);
     assertTrue(taskInfo.isPresent());
     assertRetainedTasks(taskInfo.get(), thermosPrunedTask);
 
@@ -147,7 +147,7 @@ public class GcExecutorLauncherTest extends EasyMockTest {
         .clearResources()
         .addAllResources(resources)
         .build();
-    assertFalse(gcExecutorLauncher.createTask(smallOffer).isPresent());
+    assertFalse(gcExecutorLauncher.willUse(smallOffer).isPresent());
   }
 
   private static void assertRetainedTasks(TaskInfo taskInfo, IScheduledTask... tasks)

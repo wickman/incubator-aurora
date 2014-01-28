@@ -59,11 +59,11 @@ class UserTaskLauncher implements TaskLauncher {
   }
 
   @Override
-  public Optional<TaskInfo> createTask(Offer offer) {
+  public boolean willUse(Offer offer) {
     checkNotNull(offer);
 
     offerQueue.addOffer(offer);
-    return Optional.absent();
+    return true;
   }
 
   @Override

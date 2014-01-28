@@ -155,8 +155,8 @@ public class MesosSchedulerImplTest extends EasyMockTest {
     new OfferFixture() {
       @Override void respondToOffer() throws Exception {
         expectOfferAttributesSaved(OFFER);
-        expect(systemLauncher.createTask(OFFER)).andReturn(Optional.<TaskInfo>absent());
-        expect(userLauncher.createTask(OFFER)).andReturn(Optional.<TaskInfo>absent());
+        expect(systemLauncher.willUse(OFFER)).andReturn(Optional.<TaskInfo>absent());
+        expect(userLauncher.willUse(OFFER)).andReturn(Optional.<TaskInfo>absent());
       }
     }.run();
   }
@@ -166,7 +166,7 @@ public class MesosSchedulerImplTest extends EasyMockTest {
     new OfferFixture() {
       @Override void respondToOffer() throws Exception {
         expectOfferAttributesSaved(OFFER);
-        expect(systemLauncher.createTask(OFFER)).andReturn(Optional.of(TASK));
+        expect(systemLauncher.willUse(OFFER)).andReturn(Optional.of(TASK));
         expectLaunch(TASK);
       }
     }.run();
@@ -177,8 +177,8 @@ public class MesosSchedulerImplTest extends EasyMockTest {
     new OfferFixture() {
       @Override void respondToOffer() throws Exception {
         expectOfferAttributesSaved(OFFER);
-        expect(systemLauncher.createTask(OFFER)).andReturn(Optional.<TaskInfo>absent());
-        expect(userLauncher.createTask(OFFER)).andReturn(Optional.of(TASK));
+        expect(systemLauncher.willUse(OFFER)).andReturn(Optional.<TaskInfo>absent());
+        expect(userLauncher.willUse(OFFER)).andReturn(Optional.of(TASK));
         expectLaunch(TASK);
       }
     }.run();
@@ -189,8 +189,8 @@ public class MesosSchedulerImplTest extends EasyMockTest {
     new OfferFixture() {
       @Override void respondToOffer() throws Exception {
         expectOfferAttributesSaved(OFFER);
-        expect(systemLauncher.createTask(OFFER)).andReturn(Optional.of(BIGGER_TASK));
-        expect(userLauncher.createTask(OFFER)).andReturn(Optional.<TaskInfo>absent());
+        expect(systemLauncher.willUse(OFFER)).andReturn(Optional.of(BIGGER_TASK));
+        expect(userLauncher.willUse(OFFER)).andReturn(Optional.<TaskInfo>absent());
       }
     }.run();
   }
@@ -240,11 +240,11 @@ public class MesosSchedulerImplTest extends EasyMockTest {
       @Override void expectations() throws Exception {
         expectOfferAttributesSaved(OFFER);
         expectOfferAttributesSaved(OFFER_2);
-        expect(systemLauncher.createTask(OFFER)).andReturn(Optional.<TaskInfo>absent());
-        expect(userLauncher.createTask(OFFER)).andReturn(Optional.of(TASK));
+        expect(systemLauncher.willUse(OFFER)).andReturn(Optional.<TaskInfo>absent());
+        expect(userLauncher.willUse(OFFER)).andReturn(Optional.of(TASK));
         expectLaunch(TASK);
-        expect(systemLauncher.createTask(OFFER_2)).andReturn(Optional.<TaskInfo>absent());
-        expect(userLauncher.createTask(OFFER_2)).andReturn(Optional.<TaskInfo>absent());
+        expect(systemLauncher.willUse(OFFER_2)).andReturn(Optional.<TaskInfo>absent());
+        expect(userLauncher.willUse(OFFER_2)).andReturn(Optional.<TaskInfo>absent());
       }
 
       @Override void test() {

@@ -83,7 +83,7 @@ public class UserTaskLauncherTest extends EasyMockTest {
 
     control.replay();
 
-    assertFalse(launcher.createTask(OFFER).isPresent());
+    assertFalse(launcher.willUse(OFFER).isPresent());
   }
 
   @Test
