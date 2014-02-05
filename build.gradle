@@ -190,6 +190,7 @@ dependencies {
   compile 'com.twitter.common:util-testing:0.0.7'
   compile 'com.twitter.common:util:0.0.87'
   compile 'com.twitter.common:zookeeper-testing:0.0.40'
+  compile 'org.quartz-scheduler:quartz:2.2.1'
   testCompile 'junit:junit:4.10'
 
   generatedCompile guavaDep
