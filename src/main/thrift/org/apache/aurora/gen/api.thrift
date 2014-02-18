@@ -245,6 +245,8 @@ enum ScheduleStatus {
   PREEMPTING       = 13,
   // The task is being restarted in response to a user request.
   RESTARTING       = 12,
+  // The task is being restarted in response to a host maintenance request.
+  DRAINING         = 17,
   // The task terminated with a non-zero exit code.
   FAILED           = 4,
   // Execution of the task was terminated by the system.
@@ -260,20 +262,31 @@ enum ScheduleStatus {
 }
 
 // States that a task may be in while still considered active.
-const set<ScheduleStatus> ACTIVE_STATES = [ScheduleStatus.THROTTLED,
-                                           ScheduleStatus.PENDING,
-                                           ScheduleStatus.ASSIGNED,
-                                           ScheduleStatus.STARTING,
-                                           ScheduleStatus.RUNNING,
+const set<ScheduleStatus> ACTIVE_STATES = [ScheduleStatus.ASSIGNED,
+                                           ScheduleStatus.DRAINING,
                                            ScheduleStatus.KILLING,
-                                           ScheduleStatus.RESTARTING,
-                                           ScheduleStatus.PREEMPTING]
+                                           ScheduleStatus.PENDING,
+                                           ScheduleStatus.PREEMPTING,
+                                           ScheduleStatus.RESTARTING
+                                           ScheduleStatus.RUNNING,
+                                           ScheduleStatus.STARTING,
+                                           ScheduleStatus.THROTTLED]
+
+// States that a task may be in while associated with a slave machine and non-terminal.
+const set<ScheduleStatus> SLAVE_ASSIGNED_STATES = [ScheduleStatus.ASSIGNED,
+                                                   ScheduleStatus.DRAINING,
+                                                   ScheduleStatus.KILLING,
+                                                   ScheduleStatus.PREEMPTING,
+                                                   ScheduleStatus.RESTARTING,
+                                                   ScheduleStatus.RUNNING,
+                                                   ScheduleStatus.STARTING]
 
 // States that a task may be in while in an active sandbox.
-const set<ScheduleStatus> LIVE_STATES = [ScheduleStatus.RUNNING,
-                                         ScheduleStatus.KILLING,
+const set<ScheduleStatus> LIVE_STATES = [ScheduleStatus.KILLING,
+                                         ScheduleStatus.PREEMPTING,
                                          ScheduleStatus.RESTARTING,
-                                         ScheduleStatus.PREEMPTING]
+                                         ScheduleStatus.DRAINING,
+                                         ScheduleStatus.RUNNING]
 
 // States a completed task may be in.
 const set<ScheduleStatus> TERMINAL_STATES = [ScheduleStatus.FAILED,
@@ -392,13 +405,7 @@ struct EndMaintenanceResult {
 }
 
 struct JobSummaryResult {
-  1: list<JobSummary> summaries
-}
-
-// Specifies validation level for the populateJobConfig.
-enum JobConfigValidation {
-  NONE              = 0   // No additional job config validation would be performed (only parsing).
-  RUN_FILTERS       = 1   // In addition to parsing config, will run through job filters.
+  1: set<JobSummary> summaries
 }
 
 union Result {
@@ -428,6 +435,19 @@ struct Response {
 service ReadOnlyScheduler {
   // Returns a summary of the jobs grouped by role.
   Response getJobSummary()
+
+  // Fetches the status of tasks.
+  Response getTasksStatus(1: TaskQuery query)
+
+  // Fetches the status of jobs.
+  // ownerRole is optional, in which case all jobs are returned.
+  Response getJobs(1: string ownerRole)
+
+  // Fetches the quota allocated for a user.
+  Response getQuota(1: string ownerRole)
+
+  // Returns the current version of the API implementation
+  Response getVersion()
 }
 
 // Due to assumptions in the client all authenticated RPCs must have a SessionKey as their
@@ -440,7 +460,7 @@ service AuroraSchedulerManager extends ReadOnlyScheduler {
 
   // Populates fields in a job configuration as though it were about to be run.
   // This can be used to diff a configuration running tasks.
-  Response populateJobConfig(1: JobConfiguration description, 2: JobConfigValidation validation)
+  Response populateJobConfig(1: JobConfiguration description)
 
   // Starts a cron job immediately.  The request will be denied if the specified job does not
   // exist for the role account, or the job is not a cron job.
@@ -449,25 +469,8 @@ service AuroraSchedulerManager extends ReadOnlyScheduler {
   // Restarts a batch of shards.
   Response restartShards(5: JobKey job, 3: set<i32> shardIds, 6: Lock lock 4: SessionKey session)
 
-  // TODO(Suman Karumuri): Move this call into read only api
-  // Fetches the status of tasks.
-  Response getTasksStatus(1: TaskQuery query)
-
-  // TODO(Suman Karumuri): Move this call into the read only api
-  // Fetches the status of jobs.
-  // ownerRole is optional, in which case all jobs are returned.
-  Response getJobs(1: string ownerRole)
-
   // Initiates a kill on tasks.
   Response killTasks(1: TaskQuery query, 3: Lock lock, 2: SessionKey session)
-
-  // TODO(Suman Karumuri): Move this call into the read only api
-  // Fetches the quota allocated for a user.
-  Response getQuota(1: string ownerRole)
-
-  // TODO(Suman Karumuri): Move this call into the read only api
-  // Returns the current version of the API implementation
-  Response getVersion()
 
   // Adds new instances specified by the AddInstancesConfig.
   // A job represented by the JobKey must be protected by Lock.

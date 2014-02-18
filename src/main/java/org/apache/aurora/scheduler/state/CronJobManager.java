@@ -40,7 +40,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.twitter.common.application.ShutdownRegistry;
 import com.twitter.common.args.Arg;
 import com.twitter.common.args.CmdLine;
-import com.twitter.common.base.ExceptionalCommand;
+import com.twitter.common.base.Command;
 import com.twitter.common.base.Supplier;
 import com.twitter.common.quantity.Amount;
 import com.twitter.common.quantity.Time;
@@ -147,13 +147,13 @@ public class CronJobManager extends JobManager implements EventSubscriber {
     Stats.exportSize("cron_num_pending_runs", pendingRuns);
   }
 
-  private void mapScheduledJob(IJobConfiguration job, String scheduledJobKey) {
-    IJobKey jobKey = job.getKey();
+  private void mapScheduledJob(SanitizedCronJob cronJob) throws ScheduleException {
+    IJobKey jobKey = cronJob.config.getJobConfig().getKey();
     synchronized (scheduledJobs) {
       Preconditions.checkState(
           !scheduledJobs.containsKey(jobKey),
           "Illegal state - cron schedule already exists for " + JobKeys.toPath(jobKey));
-      scheduledJobs.put(jobKey, scheduledJobKey);
+      scheduledJobs.put(jobKey, scheduleJob(cronJob));
     }
   }
 
@@ -165,23 +165,24 @@ public class CronJobManager extends JobManager implements EventSubscriber {
    */
   @Subscribe
   public void schedulerActive(SchedulerActive schedulerActive) {
-    cron.start();
-    shutdownRegistry.addAction(new ExceptionalCommand<CronException>() {
-      @Override public void execute() throws CronException {
-        cron.stop();
+    cron.startAsync().awaitRunning();
+    shutdownRegistry.addAction(new Command() {
+      @Override public void execute() {
+        cron.stopAsync().awaitTerminated();
       }
     });
 
     Iterable<IJobConfiguration> crons =
         storage.consistentRead(new Work.Quiet<Iterable<IJobConfiguration>>() {
-          @Override public Iterable<IJobConfiguration> apply(Storage.StoreProvider storeProvider) {
+          @Override
+          public Iterable<IJobConfiguration> apply(Storage.StoreProvider storeProvider) {
             return storeProvider.getJobStore().fetchJobs(MANAGER_KEY);
           }
         });
 
     for (IJobConfiguration job : crons) {
       try {
-        mapScheduledJob(job, scheduleJob(SanitizedConfiguration.fromUnsanitized(job)));
+        mapScheduledJob(new SanitizedCronJob(job, cron));
       } catch (ScheduleException | TaskDescriptionException e) {
         logLaunchFailure(job, e);
       }
@@ -197,14 +198,17 @@ public class CronJobManager extends JobManager implements EventSubscriber {
    * Triggers execution of a job.
    *
    * @param jobKey Key of the job to start.
+   * @throws ScheduleException If the job could not be started with the cron system.
+   * @throws TaskDescriptionException If the stored job associated with {@code jobKey} has field
+   *         validation problems.
    */
-  public void startJobNow(IJobKey jobKey) throws TaskDescriptionException {
+  public void startJobNow(IJobKey jobKey) throws TaskDescriptionException, ScheduleException {
     checkNotNull(jobKey);
 
     Optional<IJobConfiguration> jobConfig = fetchJob(jobKey);
     checkArgument(jobConfig.isPresent(), "No such cron job " + JobKeys.toPath(jobKey));
 
-    cronTriggered(SanitizedConfiguration.fromUnsanitized(jobConfig.get()));
+    cronTriggered(new SanitizedCronJob(jobConfig.get(), cron));
   }
 
   private void delayedRun(final Query.Builder query, final SanitizedConfiguration config) {
@@ -217,7 +221,8 @@ public class CronJobManager extends JobManager implements EventSubscriber {
       // There was no run already pending for this job, launch a task to delay launch until the
       // existing run has terminated.
       delayedRunExecutor.execute(new Runnable() {
-        @Override public void run() {
+        @Override
+        public void run() {
           runWhenTerminated(query, jobKey);
         }
       });
@@ -227,7 +232,8 @@ public class CronJobManager extends JobManager implements EventSubscriber {
   private void runWhenTerminated(final Query.Builder query, final IJobKey jobKey) {
     try {
       delayedStartBackoff.doUntilSuccess(new Supplier<Boolean>() {
-        @Override public Boolean get() {
+        @Override
+        public Boolean get() {
           if (!hasTasks(query)) {
             LOG.info("Initiating delayed launch of cron " + jobKey);
             SanitizedConfiguration config = pendingRuns.remove(jobKey);
@@ -258,10 +264,10 @@ public class CronJobManager extends JobManager implements EventSubscriber {
   /**
    * Triggers execution of a cron job, depending on the cron collision policy for the job.
    *
-   * @param config The config of the job to be triggered.
+   * @param cronJob The job to be triggered.
    */
-  @VisibleForTesting
-  void cronTriggered(SanitizedConfiguration config) {
+  private void cronTriggered(SanitizedCronJob cronJob) {
+    SanitizedConfiguration config = cronJob.config;
     IJobConfiguration job = config.getJobConfig();
     LOG.info(String.format("Cron triggered for %s at %s with policy %s",
         JobKeys.toPath(job), new Date(), job.getCronCollisionPolicy()));
@@ -347,36 +353,34 @@ public class CronJobManager extends JobManager implements EventSubscriber {
       return false;
     }
 
-    String scheduledJobKey = scheduleJob(config);
+    if (CronCollisionPolicy.RUN_OVERLAP.equals(job.getCronCollisionPolicy())) {
+      throw new ScheduleException(
+          "The RUN_OVERLAP collision policy has been removed (AURORA-38).");
+    }
+
+    SanitizedCronJob cronJob = new SanitizedCronJob(config, cron);
     storage.write(new MutateWork.NoResult.Quiet() {
-      @Override protected void execute(Storage.MutableStoreProvider storeProvider) {
+      @Override
+      protected void execute(Storage.MutableStoreProvider storeProvider) {
         storeProvider.getJobStore().saveAcceptedJob(MANAGER_KEY, job);
       }
     });
-    mapScheduledJob(job, scheduledJobKey);
+    mapScheduledJob(cronJob);
 
     return true;
   }
 
-  private String scheduleJob(final SanitizedConfiguration config) throws ScheduleException {
-    final IJobConfiguration job = config.getJobConfig();
+  private String scheduleJob(final SanitizedCronJob cronJob) throws ScheduleException {
+    IJobConfiguration job = cronJob.config.getJobConfig();
     final String jobPath = JobKeys.toPath(job);
-    if (!hasCronSchedule(job)) {
-      throw new ScheduleException(
-          String.format("Not a valid cronjob, %s has no cron schedule", jobPath));
-    }
-
-    if (!cron.isValidSchedule(job.getCronSchedule())) {
-      throw new ScheduleException("Invalid cron schedule: " + job.getCronSchedule());
-    }
-
     LOG.info(String.format("Scheduling cron job %s: %s", jobPath, job.getCronSchedule()));
     try {
       return cron.schedule(job.getCronSchedule(), new Runnable() {
-        @Override public void run() {
+        @Override
+        public void run() {
           // TODO(William Farner): May want to record information about job runs.
           LOG.info("Running cron job: " + jobPath);
-          cronTriggered(config);
+          cronTriggered(cronJob);
         }
       });
     } catch (CronException e) {
@@ -402,7 +406,8 @@ public class CronJobManager extends JobManager implements EventSubscriber {
   private Optional<IJobConfiguration> fetchJob(final IJobKey jobKey) {
     checkNotNull(jobKey);
     return storage.consistentRead(new Work.Quiet<Optional<IJobConfiguration>>() {
-      @Override public Optional<IJobConfiguration> apply(Storage.StoreProvider storeProvider) {
+      @Override
+      public Optional<IJobConfiguration> apply(Storage.StoreProvider storeProvider) {
         return storeProvider.getJobStore().fetchJob(MANAGER_KEY, jobKey);
       }
     });
@@ -420,7 +425,8 @@ public class CronJobManager extends JobManager implements EventSubscriber {
     if (scheduledJobKey != null) {
       cron.deschedule(scheduledJobKey);
       storage.write(new MutateWork.NoResult.Quiet() {
-        @Override protected void execute(Storage.MutableStoreProvider storeProvider) {
+        @Override
+        protected void execute(Storage.MutableStoreProvider storeProvider) {
           storeProvider.getJobStore().removeJob(jobKey);
         }
       });
@@ -430,7 +436,8 @@ public class CronJobManager extends JobManager implements EventSubscriber {
   }
 
   private final Function<String, String> keyToSchedule = new Function<String, String>() {
-    @Override public String apply(String key) {
+    @Override
+    public String apply(String key) {
       return cron.getSchedule(key).or("Not found.");
     }
   };
@@ -444,6 +451,33 @@ public class CronJobManager extends JobManager implements EventSubscriber {
   public Set<IJobKey> getPendingRuns() {
     synchronized (pendingRuns) {
       return ImmutableSet.copyOf(pendingRuns.keySet());
+    }
+  }
+
+  /**
+   * Used by functions that expect field validation before being called.
+   */
+  private static class SanitizedCronJob {
+    private final SanitizedConfiguration config;
+
+    SanitizedCronJob(IJobConfiguration unsanitized, CronScheduler cron)
+        throws ScheduleException, TaskDescriptionException {
+
+      this(SanitizedConfiguration.fromUnsanitized(unsanitized), cron);
+    }
+
+    SanitizedCronJob(SanitizedConfiguration config, CronScheduler cron) throws ScheduleException {
+      final IJobConfiguration job = config.getJobConfig();
+      if (!hasCronSchedule(job)) {
+        throw new ScheduleException(
+            String.format("Not a valid cronjob, %s has no cron schedule", JobKeys.toPath(job)));
+      }
+
+      if (!cron.isValidSchedule(job.getCronSchedule())) {
+        throw new ScheduleException("Invalid cron schedule: " + job.getCronSchedule());
+      }
+
+      this.config = config;
     }
   }
 }

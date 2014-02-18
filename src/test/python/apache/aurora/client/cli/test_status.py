@@ -29,9 +29,9 @@ from gen.apache.aurora.ttypes import (
 )
 
 from apache.aurora.client.cli import (
-    AuroraCommandLine,
     EXIT_INVALID_PARAMETER
 )
+from apache.aurora.client.cli.client import AuroraCommandLine
 from apache.aurora.common.aurora_job_key import AuroraJobKey
 from apache.aurora.client.cli.util import AuroraClientCommandTest, FakeAuroraCommandContext
 
@@ -149,7 +149,6 @@ class TestJobStatus(AuroraClientCommandTest):
     assert mock_api.check_status.call_args_list[1][0][0].role == 'bozo'
     assert mock_api.check_status.call_args_list[1][0][0].env == 'test'
     assert mock_api.check_status.call_args_list[1][0][0].name == 'hello'
-
 
   def test_status_wildcard_two(self):
     """Test status using a wildcard. It should first call api.get_jobs, and then do a

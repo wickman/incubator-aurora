@@ -34,6 +34,7 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.base.Throwables;
 import com.google.common.collect.FluentIterable;
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -66,7 +67,6 @@ import org.apache.aurora.gen.Hosts;
 import org.apache.aurora.gen.InstanceConfigRewrite;
 import org.apache.aurora.gen.InstanceKey;
 import org.apache.aurora.gen.JobConfigRewrite;
-import org.apache.aurora.gen.JobConfigValidation;
 import org.apache.aurora.gen.JobConfiguration;
 import org.apache.aurora.gen.JobKey;
 import org.apache.aurora.gen.JobSummary;
@@ -152,11 +152,12 @@ class SchedulerThriftInterface implements AuroraAdmin.Iface {
   @CmdLine(name = "kill_task_max_backoff",
       help = "Max backoff delay while waiting for the tasks to transition to KILLED.")
   private static final Arg<Amount<Long, Time>> KILL_TASK_MAX_BACKOFF =
-      Arg.create(Amount.of(30L, Time.SECONDS));
+      Arg.create(Amount.of(1L, Time.MINUTES));
 
   private static final Function<IScheduledTask, String> GET_ROLE = Functions.compose(
       new Function<ITaskConfig, String>() {
-        @Override public String apply(ITaskConfig task) {
+        @Override
+        public String apply(ITaskConfig task) {
           return task.getOwner().getRole();
         }
       },
@@ -304,8 +305,7 @@ class SchedulerThriftInterface implements AuroraAdmin.Iface {
   }
 
   @Override
-  public Response populateJobConfig(JobConfiguration description, JobConfigValidation validation) {
-
+  public Response populateJobConfig(JobConfiguration description) {
     checkNotNull(description);
 
     Response response = new Response();
@@ -313,17 +313,12 @@ class SchedulerThriftInterface implements AuroraAdmin.Iface {
       SanitizedConfiguration sanitized =
           SanitizedConfiguration.fromUnsanitized(IJobConfiguration.build(description));
 
-      // TODO(maximk): Drop it once migration to client quota checks is completed.
-      if (validation != null && validation == JobConfigValidation.RUN_FILTERS) {
-        schedulerCore.validateJobResources(sanitized);
-      }
-
       PopulateJobResult result = new PopulateJobResult()
           .setPopulated(ITaskConfig.toBuildersSet(sanitized.getTaskConfigs().values()));
       response.setResult(Result.populateJobResult(result))
           .setResponseCode(OK)
           .setMessage("Tasks populated");
-    } catch (TaskDescriptionException | ScheduleException e) {
+    } catch (TaskDescriptionException e) {
       response.setResponseCode(INVALID_REQUEST)
           .setMessage("Invalid configuration: " + e.getMessage());
     }
@@ -380,16 +375,15 @@ class SchedulerThriftInterface implements AuroraAdmin.Iface {
 
   @Override
   public Response getJobSummary() {
-    Set<IScheduledTask> tasks = Storage.Util.weaklyConsistentFetchTasks(storage, Query.unscoped());
-    Multimap<String, IJobKey> jobsByRole = Multimaps.index(
-        FluentIterable.from(tasks).transform(Tasks.SCHEDULED_TO_JOB_KEY),
-        JobKeys.TO_ROLE);
+    Multimap<String, IJobKey> jobsByRole = mapByRole(
+        Storage.Util.weaklyConsistentFetchTasks(storage, Query.unscoped()),
+        Tasks.SCHEDULED_TO_JOB_KEY);
 
-    Multimap<String, IJobKey> cronJobsByRole = Multimaps.index(
-        FluentIterable.from(cronJobManager.getJobs()).transform(JobKeys.FROM_CONFIG),
-        JobKeys.TO_ROLE);
+    Multimap<String, IJobKey> cronJobsByRole = mapByRole(
+        cronJobManager.getJobs(),
+        JobKeys.FROM_CONFIG);
 
-    List<JobSummary> jobSummaries = Lists.newLinkedList();
+    Set<JobSummary> jobSummaries = Sets.newHashSet();
     for (String role : Sets.union(jobsByRole.keySet(), cronJobsByRole.keySet())) {
       JobSummary summary = new JobSummary();
       summary.setRole(role);
@@ -401,6 +395,14 @@ class SchedulerThriftInterface implements AuroraAdmin.Iface {
     return new Response()
         .setResponseCode(OK)
         .setResult(Result.jobSummaryResult(new JobSummaryResult(jobSummaries)));
+  }
+
+  private static <T> Multimap<String, IJobKey> mapByRole(
+      Iterable<T> tasks,
+      Function<T, IJobKey> keyExtractor) {
+
+    return HashMultimap.create(
+        Multimaps.index(Iterables.transform(tasks, keyExtractor), JobKeys.TO_ROLE));
   }
 
   @Override
@@ -534,7 +536,8 @@ class SchedulerThriftInterface implements AuroraAdmin.Iface {
     final Query.Builder activeQuery = Query.arbitrary(query.setStatuses(Tasks.ACTIVE_STATES));
     try {
       backoff.doUntilSuccess(new Supplier<Boolean>() {
-        @Override public Boolean get() {
+        @Override
+        public Boolean get() {
           Set<IScheduledTask> tasks = Storage.Util.consistentFetchTasks(storage, activeQuery);
           if (tasks.isEmpty()) {
             LOG.info("Tasks all killed, done waiting.");
@@ -784,7 +787,8 @@ class SchedulerThriftInterface implements AuroraAdmin.Iface {
     }
 
     return storage.write(new MutateWork.Quiet<Response>() {
-      @Override public Response apply(MutableStoreProvider storeProvider) {
+      @Override
+      public Response apply(MutableStoreProvider storeProvider) {
         List<String> errors = Lists.newArrayList();
 
         for (ConfigRewrite command : request.getRewriteCommands()) {

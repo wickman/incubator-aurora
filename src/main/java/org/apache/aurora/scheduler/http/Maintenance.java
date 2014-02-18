@@ -60,7 +60,8 @@ public class Maintenance {
   @Produces(MediaType.APPLICATION_JSON)
   public Response getHosts() {
     return storage.weaklyConsistentRead(new Work.Quiet<Response>() {
-      @Override public Response apply(StoreProvider storeProvider) {
+      @Override
+      public Response apply(StoreProvider storeProvider) {
         Multimap<MaintenanceMode, String> hostsByMode =
             Multimaps.transformValues(
               Multimaps.index(storeProvider.getAttributeStore().getHostAttributes(), GET_MODE),
@@ -81,27 +82,22 @@ public class Maintenance {
       drainingTasks.addAll(provider.getTaskStore().fetchTasks(Query.slaveScoped(host).active()));
     }
     return Multimaps.transformValues(
-        Multimaps.index(drainingTasks.build(), TASK_TO_HOST),
+        Multimaps.index(drainingTasks.build(), Tasks.SCHEDULED_TO_SLAVE_HOST),
         Tasks.SCHEDULED_TO_ID);
   }
 
-  private static final Function<IScheduledTask, String> TASK_TO_HOST =
-      new Function<IScheduledTask, String>() {
-        @Override public String apply(IScheduledTask task) {
-          return task.getAssignedTask().getSlaveHost();
-        }
-      };
-
   private static final Function<HostAttributes, String> HOST_NAME =
       new Function<HostAttributes, String>() {
-        @Override public String apply(HostAttributes attributes) {
+        @Override
+        public String apply(HostAttributes attributes) {
           return attributes.getHost();
         }
       };
 
   private static final Function<HostAttributes, MaintenanceMode> GET_MODE =
       new Function<HostAttributes, MaintenanceMode>() {
-        @Override public MaintenanceMode apply(HostAttributes attrs) {
+        @Override
+        public MaintenanceMode apply(HostAttributes attrs) {
           return attrs.getMode();
         }
       };

@@ -1,5 +1,5 @@
-/*
- * Copyright 2014 Twitter, Inc.
+/**
+ * Copyright 2014 Apache Software Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -177,7 +177,8 @@ public class RescheduleCalculatorImplTest extends EasyMockTest {
 
   private static final Function<Map.Entry<ScheduleStatus, Long>, TaskEvent> TO_EVENT =
       new Function<Entry<ScheduleStatus, Long>, TaskEvent>() {
-        @Override public TaskEvent apply(Entry<ScheduleStatus, Long> input) {
+        @Override
+        public TaskEvent apply(Entry<ScheduleStatus, Long> input) {
           return new TaskEvent().setStatus(input.getKey()).setTimestamp(input.getValue());
         }
       };

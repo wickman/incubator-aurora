@@ -17,11 +17,13 @@
 import contextlib
 import unittest
 
-from apache.aurora.client.cli import AuroraCommandLine
+from twitter.common.contextutil import temporary_file
+
+from apache.aurora.client.cli.client import AuroraCommandLine
 from apache.aurora.client.hooks.hooked_api import HookedAuroraClientAPI
 from apache.aurora.common.aurora_job_key import AuroraJobKey
 from twitter.common.contextutil import temporary_file
-from apache.aurora.client.cli.jobs import parse_instances
+from apache.aurora.client.cli.options import parse_instances
 from apache.aurora.client.cli.util import AuroraClientCommandTest, FakeAuroraCommandContext
 
 from gen.apache.aurora.ttypes import (

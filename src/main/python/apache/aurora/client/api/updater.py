@@ -18,13 +18,9 @@ import json
 from collections import namedtuple
 from difflib import unified_diff
 
-from twitter.common import log
-
 from gen.apache.aurora.constants import ACTIVE_STATES
-
 from gen.apache.aurora.ttypes import (
     AddInstancesConfig,
-    JobConfigValidation,
     JobKey,
     Identity,
     Lock,
@@ -43,6 +39,7 @@ from .updater_util import FailureThreshold, UpdaterConfig
 
 from thrift.protocol import TJSONProtocol
 from thrift.TSerialization import serialize
+from twitter.common import log
 
 class Updater(object):
   """Update the instances of a job in batches."""
@@ -174,6 +171,10 @@ class Updater(object):
     instances_to_rollback -- instance ids to rollback.
     instance_configs -- instance configuration to use for rollback.
     """
+    if not self._update_config.rollback_on_failure:
+      log.info('Rollback on failure is disabled in config. Aborting rollback')
+      return
+
     log.info('Reverting update for %s' % instances_to_rollback)
     instance_operation = self.OperationConfigs(
         from_config=instance_configs.local_config_map,
@@ -391,7 +392,7 @@ class Updater(object):
 
     Returns a TaskConfig populated with default values.
     """
-    resp = self._scheduler.populateJobConfig(self._config.job(), JobConfigValidation.RUN_FILTERS)
+    resp = self._scheduler.populateJobConfig(self._config.job())
     self._check_and_log_response(resp)
 
     # Safe to take the first element as Scheduler would throw in case zero instances provided.

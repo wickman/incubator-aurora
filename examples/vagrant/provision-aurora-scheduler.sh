@@ -8,8 +8,8 @@ install -m 755 /vagrant/dist/aurora_admin.pex /usr/local/bin/aurora_admin
 
 apt-get update
 apt-get -y install java7-runtime-headless curl
-wget -c http://downloads.mesosphere.io/master/ubuntu/12.04/mesos_0.15.0-rc4_amd64.deb
-dpkg --install mesos_0.15.0-rc4_amd64.deb
+wget -c http://downloads.mesosphere.io/master/ubuntu/12.04/mesos_0.15.0_amd64.deb
+dpkg --install mesos_0.15.0_amd64.deb
 
 # TODO(ksweeney): Make this a be part of the Aurora distribution tarball.
 # Location where aurora-scheduler.zip was unpacked.
@@ -60,7 +60,7 @@ AURORA_FLAGS=(
 # Environment variables control the behavior of the Mesos scheduler driver (libmesos).
 export GLOG_v=0
 export LIBPROCESS_PORT=8083
-export LIBPROCESS_IP=192.168.33.5
+export LIBPROCESS_IP=192.168.33.6
 
 (
   while true
@@ -78,7 +78,9 @@ cat > /etc/aurora/clusters.json <<EOF
   "name": "example",
   "zk": "192.168.33.2",
   "scheduler_zk_path": "/aurora/scheduler",
-  "auth_mechanism": "UNAUTHENTICATED"
+  "auth_mechanism": "UNAUTHENTICATED",
+  "slave_run_directory": "latest",
+  "slave_root": "/var/lib/mesos"
 }]
 EOF
 

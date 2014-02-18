@@ -92,13 +92,29 @@ public final class ResourceSlot {
     return new ResourceSlot(new Resources(totalCPU, totalRAM, disk, ports));
   }
 
+  @Override
+  public boolean equals(Object o) {
+    if (!(o instanceof ResourceSlot)) {
+      return false;
+    }
+
+    ResourceSlot other = (ResourceSlot) o;
+    return resources.equals(other.resources);
+  }
+
+  @Override
+  public int hashCode() {
+    return resources.hashCode();
+  }
+
   public static ResourceSlot sum(ResourceSlot... rs) {
     return sum(Arrays.asList(rs));
   }
 
   public static ResourceSlot sum(Iterable<ResourceSlot> rs) {
     Resources r = Resources.sum(Iterables.transform(rs, new Function<ResourceSlot, Resources>() {
-      @Override public Resources apply(ResourceSlot input) {
+      @Override
+      public Resources apply(ResourceSlot input) {
         return input.resources;
       }
     }));
@@ -107,7 +123,8 @@ public final class ResourceSlot {
   }
 
   public static final Ordering<ResourceSlot> ORDER = new Ordering<ResourceSlot>() {
-    @Override public int compare(ResourceSlot left, ResourceSlot right) {
+    @Override
+    public int compare(ResourceSlot left, ResourceSlot right) {
       return Resources.RESOURCE_ORDER.compare(left.resources, right.resources);
     }
   };

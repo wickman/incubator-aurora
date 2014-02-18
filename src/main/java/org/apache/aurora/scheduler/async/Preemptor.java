@@ -48,6 +48,7 @@ import org.apache.aurora.gen.ScheduleStatus;
 import org.apache.aurora.scheduler.ResourceSlot;
 import org.apache.aurora.scheduler.base.Query;
 import org.apache.aurora.scheduler.base.Tasks;
+import org.apache.aurora.scheduler.filter.CachedJobState;
 import org.apache.aurora.scheduler.filter.SchedulingFilter;
 import org.apache.aurora.scheduler.state.StateManager;
 import org.apache.aurora.scheduler.storage.Storage;
@@ -75,9 +76,10 @@ public interface Preemptor {
    * Preempts active tasks in favor of the input task.
    *
    * @param taskId ID of the preempting task.
+   * @param cachedJobState Cached information about the job containing {@code taskId}.
    * @return ID of the slave where preemption occured.
    */
-  Optional<String> findPreemptionSlotFor(String taskId);
+  Optional<String> findPreemptionSlotFor(String taskId, CachedJobState cachedJobState);
 
   /**
    * A task preemptor that tries to find tasks that are waiting to be scheduled, which are of higher
@@ -99,11 +101,12 @@ public interface Preemptor {
 
     @VisibleForTesting
     static final Query.Builder CANDIDATE_QUERY = Query.statusScoped(
-        EnumSet.copyOf(Sets.difference(Tasks.ACTIVE_STATES, EnumSet.of(PENDING, PREEMPTING))));
+        EnumSet.copyOf(Sets.difference(Tasks.SLAVE_ASSIGNED_STATES, EnumSet.of(PREEMPTING))));
 
     private static final Function<IAssignedTask, Integer> GET_PRIORITY =
         new Function<IAssignedTask, Integer>() {
-          @Override public Integer apply(IAssignedTask task) {
+          @Override
+          public Integer apply(IAssignedTask task) {
             return task.getTask().getPriority();
           }
         };
@@ -115,7 +118,8 @@ public interface Preemptor {
     private final AtomicLong noSlotsFound = Stats.exportLong("preemptor_no_slots_found");
 
     private final Predicate<IScheduledTask> isIdleTask = new Predicate<IScheduledTask>() {
-      @Override public boolean apply(IScheduledTask task) {
+      @Override
+      public boolean apply(IScheduledTask task) {
         return (clock.nowMillis() - Tasks.getLatestEvent(task).getTimestamp())
             >= preemptionCandidacyDelay.as(Time.MILLISECONDS);
       }
@@ -168,21 +172,16 @@ public interface Preemptor {
 
     private static final Function<IAssignedTask, String> TASK_TO_SLAVE_ID =
         new Function<IAssignedTask, String>() {
-          @Override public String apply(IAssignedTask input) {
+          @Override
+          public String apply(IAssignedTask input) {
             return input.getSlaveId();
-          }
-        };
-
-    private static final Function<IAssignedTask, String> TASK_TO_HOST =
-        new Function<IAssignedTask, String>() {
-          @Override public String apply(IAssignedTask input) {
-            return input.getSlaveHost();
           }
         };
 
     private static Predicate<IAssignedTask> canPreempt(final IAssignedTask pending) {
       return new Predicate<IAssignedTask>() {
-        @Override public boolean apply(IAssignedTask possibleVictim) {
+        @Override
+        public boolean apply(IAssignedTask possibleVictim) {
           return preemptionFilter(possibleVictim).apply(pending);
         }
       };
@@ -190,21 +189,24 @@ public interface Preemptor {
 
     private static final Function<IAssignedTask, ResourceSlot> TASK_TO_RESOURCES =
         new Function<IAssignedTask, ResourceSlot>() {
-          @Override public ResourceSlot apply(IAssignedTask input) {
+          @Override
+          public ResourceSlot apply(IAssignedTask input) {
             return ResourceSlot.from(input.getTask());
           }
         };
 
     private static final Function<Offer, ResourceSlot> OFFER_TO_RESOURCE_SLOT =
         new Function<Offer, ResourceSlot>() {
-          @Override public ResourceSlot apply(Offer offer) {
+          @Override
+          public ResourceSlot apply(Offer offer) {
             return ResourceSlot.from(offer);
           }
         };
 
     private static final Function<Offer, String> OFFER_TO_HOST =
         new Function<Offer, String>() {
-          @Override public String apply(Offer offer) {
+          @Override
+          public String apply(Offer offer) {
             return offer.getHostname();
           }
         };
@@ -222,12 +224,13 @@ public interface Preemptor {
     private Optional<Set<IAssignedTask>> getTasksToPreempt(
         Iterable<IAssignedTask> possibleVictims,
         Iterable<Offer> offers,
-        IAssignedTask pendingTask) {
+        IAssignedTask pendingTask,
+        CachedJobState cachedJobState) {
 
       // This enforces the precondition that all of the resources are from the same host. We need to
       // get the host for the schedulingFilter.
       Set<String> hosts = ImmutableSet.<String>builder()
-          .addAll(Iterables.transform(possibleVictims, TASK_TO_HOST))
+          .addAll(Iterables.transform(possibleVictims, Tasks.ASSIGNED_TO_SLAVE_HOST))
           .addAll(Iterables.transform(offers, OFFER_TO_HOST)).build();
 
       String host = Iterables.getOnlyElement(hosts);
@@ -240,7 +243,8 @@ public interface Preemptor {
             slackResources,
             host,
             pendingTask.getTask(),
-            pendingTask.getTaskId());
+            pendingTask.getTaskId(),
+            cachedJobState);
 
         if (vetos.isEmpty()) {
           return Optional.<Set<IAssignedTask>>of(ImmutableSet.<IAssignedTask>of());
@@ -269,7 +273,8 @@ public interface Preemptor {
             totalResource,
             host,
             pendingTask.getTask(),
-            pendingTask.getTaskId());
+            pendingTask.getTaskId(),
+            cachedJobState);
 
         if (vetos.isEmpty()) {
           return Optional.<Set<IAssignedTask>>of(ImmutableSet.copyOf(toPreemptTasks));
@@ -280,7 +285,8 @@ public interface Preemptor {
 
     private static final Function<Offer, String> OFFER_TO_SLAVE_ID =
         new Function<Offer, String>() {
-          @Override public String apply(Offer offer) {
+          @Override
+          public String apply(Offer offer) {
             return offer.getSlaveId().getValue();
           }
         };
@@ -297,7 +303,10 @@ public interface Preemptor {
     }
 
     @Override
-    public synchronized Optional<String> findPreemptionSlotFor(String taskId) {
+    public synchronized Optional<String> findPreemptionSlotFor(
+        String taskId,
+        CachedJobState cachedJobState) {
+
       List<IAssignedTask> pendingTasks =
           fetch(Query.statusScoped(PENDING).byId(taskId), isIdleTask);
 
@@ -329,7 +338,8 @@ public interface Preemptor {
         Optional<Set<IAssignedTask>> toPreemptTasks = getTasksToPreempt(
             slavesToActiveTasks.get(slaveID),
             slavesToOffers.get(slaveID),
-            pendingTask);
+            pendingTask,
+            cachedJobState);
 
         if (toPreemptTasks.isPresent()) {
           for (IAssignedTask toPreempt : toPreemptTasks.get()) {
@@ -377,7 +387,8 @@ public interface Preemptor {
 
     private static Predicate<IAssignedTask> isOwnedBy(final String role) {
       return new Predicate<IAssignedTask>() {
-        @Override public boolean apply(IAssignedTask task) {
+        @Override
+        public boolean apply(IAssignedTask task) {
           return getRole(task).equals(role);
         }
       };
@@ -389,7 +400,8 @@ public interface Preemptor {
 
     private static Predicate<Integer> greaterThan(final int value) {
       return new Predicate<Integer>() {
-        @Override public boolean apply(Integer input) {
+        @Override
+        public boolean apply(Integer input) {
           return input > value;
         }
       };

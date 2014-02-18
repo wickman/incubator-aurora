@@ -29,10 +29,6 @@ import sys
 import time
 from tempfile import NamedTemporaryFile
 
-from twitter.common import app, log
-from twitter.common.python.pex import PexInfo
-from twitter.common.python.dirwrapper import PythonDirectoryWrapper
-
 from apache.aurora.client.base import (
     check_and_log_response,
     deprecation_warning,
@@ -49,6 +45,7 @@ from apache.aurora.client.factory import make_client, make_client_factory
 from apache.aurora.client.options import (
     CLUSTER_CONFIG_OPTION,
     CLUSTER_INVOKE_OPTION,
+    CLUSTER_NAME_OPTION,
     ENV_CONFIG_OPTION,
     ENVIRONMENT_BIND_OPTION,
     FROM_JOBKEY_OPTION,
@@ -61,6 +58,10 @@ from apache.aurora.common.aurora_job_key import AuroraJobKey
 
 from gen.apache.aurora.constants import ACTIVE_STATES, CURRENT_API_VERSION, AURORA_EXECUTOR_NAME
 from gen.apache.aurora.ttypes import ExecutorConfig, ResponseCode, ScheduleStatus
+
+from twitter.common import app, log
+from twitter.common.python.pex import PexInfo
+from twitter.common.python.dirwrapper import PythonDirectoryWrapper
 
 
 def get_job_config(job_spec, config_file, options):
@@ -133,7 +134,8 @@ def create(job_spec, config_file):
   monitor = JobMonitor(api, config.role(), config.environment(), config.name())
   resp = api.create_job(config)
   check_and_log_response(resp)
-  handle_open(api.scheduler_proxy.scheduler_client().url, config.role(), config.environment(), config.name())
+  handle_open(api.scheduler_proxy.scheduler_client().url, config.role(), config.environment(),
+      config.name())
   if options.wait_until == 'RUNNING':
     monitor.wait_until(monitor.running_or_finished)
   elif options.wait_until == 'FINISHED':
@@ -229,7 +231,8 @@ def do_open(args, _):
   api = make_client(cluster_name)
 
   import webbrowser
-  webbrowser.open_new_tab(synthesize_url(api.scheduler_proxy.scheduler_client().url, role, env, job))
+  webbrowser.open_new_tab(
+      synthesize_url(api.scheduler_proxy.scheduler_client().url, role, env, job))
 
 
 @app.command
@@ -572,7 +575,8 @@ def restart(args, options):
       options.restart_threshold,
       options.watch_secs,
       options.max_per_shard_failures,
-      options.max_total_failures)
+      options.max_total_failures,
+      options.rollback_on_failure)
   resp = api.restart(job_key, options.shards, updater_config,
       options.health_check_interval_seconds, config=config)
   check_and_log_response(resp)
@@ -597,7 +601,7 @@ def cancel_update(args, options):
 
 
 @app.command
-@app.command_option(CLUSTER_INVOKE_OPTION)
+@app.command_option(CLUSTER_NAME_OPTION)
 @requires.exactly('role')
 def get_quota(role):
   """usage: get_quota --cluster=CLUSTER role

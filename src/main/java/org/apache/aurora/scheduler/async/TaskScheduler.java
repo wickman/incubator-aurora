@@ -27,9 +27,12 @@ import javax.inject.Inject;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
+import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
 import com.google.common.base.Ticker;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.eventbus.Subscribe;
 import com.google.inject.BindingAnnotation;
@@ -41,13 +44,17 @@ import com.twitter.common.stats.Stats;
 import com.twitter.common.util.Clock;
 
 import org.apache.aurora.scheduler.base.Query;
+import org.apache.aurora.scheduler.base.Tasks;
 import org.apache.aurora.scheduler.events.PubsubEvent.EventSubscriber;
 import org.apache.aurora.scheduler.events.PubsubEvent.TaskStateChange;
+import org.apache.aurora.scheduler.filter.CachedJobState;
 import org.apache.aurora.scheduler.state.StateManager;
 import org.apache.aurora.scheduler.state.TaskAssigner;
 import org.apache.aurora.scheduler.storage.Storage;
 import org.apache.aurora.scheduler.storage.Storage.MutableStoreProvider;
 import org.apache.aurora.scheduler.storage.Storage.MutateWork;
+import org.apache.aurora.scheduler.storage.TaskStore;
+import org.apache.aurora.scheduler.storage.entities.IJobKey;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
 import org.apache.mesos.Protos.Offer;
 import org.apache.mesos.Protos.SlaveID;
@@ -127,23 +134,25 @@ interface TaskScheduler extends EventSubscriber {
     }
 
     private Function<Offer, Optional<TaskInfo>> getAssignerFunction(
+        final CachedJobState cachedJobState,
         final String taskId,
         final IScheduledTask task) {
 
       return new Function<Offer, Optional<TaskInfo>>() {
-        @Override public Optional<TaskInfo> apply(Offer offer) {
+        @Override
+        public Optional<TaskInfo> apply(Offer offer) {
           Optional<String> reservedTaskId = reservations.getSlaveReservation(offer.getSlaveId());
           if (reservedTaskId.isPresent()) {
             if (taskId.equals(reservedTaskId.get())) {
               // Slave is reserved to satisfy this task.
-              return assigner.maybeAssign(offer, task);
+              return assigner.maybeAssign(offer, task, cachedJobState);
             } else {
               // Slave is reserved for another task.
               return Optional.absent();
             }
           } else {
             // Slave is not reserved.
-            return assigner.maybeAssign(offer, task);
+            return assigner.maybeAssign(offer, task, cachedJobState);
           }
         }
       };
@@ -153,13 +162,28 @@ interface TaskScheduler extends EventSubscriber {
     static final Optional<String> LAUNCH_FAILED_MSG =
         Optional.of("Unknown exception attempting to schedule task.");
 
+    @VisibleForTesting
+    static Query.Builder activeJobStateQuery(IJobKey jobKey) {
+      return Query.jobScoped(jobKey).byStatus(Tasks.SLAVE_ASSIGNED_STATES);
+    }
+
+    private CachedJobState getJobState(final TaskStore store, final IJobKey jobKey) {
+      return new CachedJobState(Suppliers.memoize(new Supplier<ImmutableSet<IScheduledTask>>() {
+        @Override
+        public ImmutableSet<IScheduledTask> get() {
+          return store.fetchTasks(activeJobStateQuery(jobKey));
+        }
+      }));
+    }
+
     @Timed("task_schedule_attempt")
     @Override
     public TaskSchedulerResult schedule(final String taskId) {
       scheduleAttemptsFired.incrementAndGet();
       try {
         return storage.write(new MutateWork.Quiet<TaskSchedulerResult>() {
-          @Override public TaskSchedulerResult apply(MutableStoreProvider store) {
+          @Override
+          public TaskSchedulerResult apply(MutableStoreProvider store) {
             LOG.fine("Attempting to schedule task " + taskId);
             final IScheduledTask task = Iterables.getOnlyElement(
                 store.getTaskStore().fetchTasks(Query.taskScoped(taskId).byStatus(PENDING)),
@@ -167,10 +191,12 @@ interface TaskScheduler extends EventSubscriber {
             if (task == null) {
               LOG.warning("Failed to look up task " + taskId + ", it may have been deleted.");
             } else {
+              final CachedJobState cachedJobState =
+                  getJobState(store.getTaskStore(), Tasks.SCHEDULED_TO_JOB_KEY.apply(task));
               try {
-                if (!offerQueue.launchFirst(getAssignerFunction(taskId, task))) {
+                if (!offerQueue.launchFirst(getAssignerFunction(cachedJobState, taskId, task))) {
                   // Task could not be scheduled.
-                  maybePreemptFor(taskId);
+                  maybePreemptFor(taskId, cachedJobState);
                   return TaskSchedulerResult.TRY_AGAIN;
                 }
               } catch (OfferQueue.LaunchException e) {
@@ -198,11 +224,11 @@ interface TaskScheduler extends EventSubscriber {
       }
     }
 
-    private void maybePreemptFor(String taskId) {
+    private void maybePreemptFor(String taskId, CachedJobState cachedJobState) {
       if (reservations.hasReservationForTask(taskId)) {
         return;
       }
-      Optional<String> slaveId = preemptor.findPreemptionSlotFor(taskId);
+      Optional<String> slaveId = preemptor.findPreemptionSlotFor(taskId, cachedJobState);
       if (slaveId.isPresent()) {
         this.reservations.add(SlaveID.newBuilder().setValue(slaveId.get()).build(), taskId);
       }
@@ -224,13 +250,15 @@ interface TaskScheduler extends EventSubscriber {
         this.reservations = CacheBuilder.newBuilder()
             .expireAfterWrite(duration.as(Time.MINUTES), TimeUnit.MINUTES)
             .ticker(new Ticker() {
-              @Override public long read() {
+              @Override
+              public long read() {
                 return clock.nowNanos();
               }
             })
             .build();
         Stats.export(new StatImpl<Long>("reservation_cache_size") {
-          @Override public Long read() {
+          @Override
+          public Long read() {
             return reservations.size();
           }
         });

@@ -46,14 +46,16 @@ public final class Tasks {
 
   public static final Function<IScheduledTask, IAssignedTask> SCHEDULED_TO_ASSIGNED =
       new Function<IScheduledTask, IAssignedTask>() {
-        @Override public IAssignedTask apply(IScheduledTask task) {
+        @Override
+        public IAssignedTask apply(IScheduledTask task) {
           return task.getAssignedTask();
         }
       };
 
   public static final Function<IAssignedTask, ITaskConfig> ASSIGNED_TO_INFO =
       new Function<IAssignedTask, ITaskConfig>() {
-        @Override public ITaskConfig apply(IAssignedTask task) {
+        @Override
+        public ITaskConfig apply(IAssignedTask task) {
           return task.getTask();
         }
       };
@@ -63,7 +65,8 @@ public final class Tasks {
 
   public static final Function<IAssignedTask, String> ASSIGNED_TO_ID =
       new Function<IAssignedTask, String>() {
-        @Override public String apply(IAssignedTask task) {
+        @Override
+        public String apply(IAssignedTask task) {
           return task.getTaskId();
         }
       };
@@ -73,7 +76,8 @@ public final class Tasks {
 
   public static final Function<IAssignedTask, Integer> ASSIGNED_TO_INSTANCE_ID =
       new Function<IAssignedTask, Integer>() {
-        @Override public Integer apply(IAssignedTask task) {
+        @Override
+        public Integer apply(IAssignedTask task) {
           return task.getInstanceId();
         }
       };
@@ -83,7 +87,8 @@ public final class Tasks {
 
   public static final Function<ITaskConfig, IJobKey> INFO_TO_JOB_KEY =
       new Function<ITaskConfig, IJobKey>() {
-        @Override public IJobKey apply(ITaskConfig task) {
+        @Override
+        public IJobKey apply(ITaskConfig task) {
           return JobKeys.from(task);
         }
       };
@@ -93,6 +98,17 @@ public final class Tasks {
 
   public static final Function<IScheduledTask, IJobKey> SCHEDULED_TO_JOB_KEY =
       Functions.compose(ASSIGNED_TO_JOB_KEY, SCHEDULED_TO_ASSIGNED);
+
+  public static final Function<IAssignedTask, String> ASSIGNED_TO_SLAVE_HOST =
+      new Function<IAssignedTask, String>() {
+        @Override
+        public String apply(IAssignedTask task) {
+          return task.getSlaveHost();
+        }
+      };
+
+  public static final Function<IScheduledTask, String> SCHEDULED_TO_SLAVE_HOST =
+      Functions.compose(ASSIGNED_TO_SLAVE_HOST, SCHEDULED_TO_ASSIGNED);
 
   /**
    * Different states that an active task may be in.
@@ -106,16 +122,24 @@ public final class Tasks {
   public static final Set<ScheduleStatus> TERMINAL_STATES =
       EnumSet.copyOf(apiConstants.TERMINAL_STATES);
 
+  /**
+   * Tasks a state can be in when associated with a slave machine.
+   */
+  public static final Set<ScheduleStatus> SLAVE_ASSIGNED_STATES =
+      EnumSet.copyOf(apiConstants.SLAVE_ASSIGNED_STATES);
+
   public static final Predicate<ITaskConfig> IS_PRODUCTION =
       new Predicate<ITaskConfig>() {
-        @Override public boolean apply(ITaskConfig task) {
+        @Override
+        public boolean apply(ITaskConfig task) {
           return task.isProduction();
         }
       };
 
   public static final Function<IScheduledTask, ScheduleStatus> GET_STATUS =
       new Function<IScheduledTask, ScheduleStatus>() {
-        @Override public ScheduleStatus apply(IScheduledTask task) {
+        @Override
+        public ScheduleStatus apply(IScheduledTask task) {
           return task.getStatus();
         }
       };
@@ -184,7 +208,8 @@ public final class Tasks {
 
   public static final Ordering<IScheduledTask> LATEST_ACTIVITY = Ordering.natural()
       .onResultOf(new Function<IScheduledTask, Long>() {
-        @Override public Long apply(IScheduledTask task) {
+        @Override
+        public Long apply(IScheduledTask task) {
           return getLatestEvent(task).getTimestamp();
         }
       });

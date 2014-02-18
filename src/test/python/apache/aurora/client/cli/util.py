@@ -38,6 +38,8 @@ class FakeAuroraCommandContext(AuroraCommandContext):
     self.fake_api = self.create_mock_api()
     self.task_status = []
     self.showed_urls = []
+    self.out = []
+    self.err = []
 
   def get_api(self, cluster):
     return self.fake_api
@@ -58,6 +60,18 @@ class FakeAuroraCommandContext(AuroraCommandContext):
     mock_api = Mock(spec=HookedAuroraClientAPI)
     mock_api.scheduler_proxy = mock_scheduler_proxy
     return mock_api
+
+  def print_out(self, str):
+    self.out.append(str)
+
+  def print_err(self, str):
+    self.err.append(str)
+
+  def get_out(self):
+    return self.out
+
+  def get_err(self):
+    return self.err
 
   def open_page(self, url):
     self.showed_urls.append(url)
@@ -80,7 +94,6 @@ class AuroraClientCommandTest(unittest.TestCase):
     response.result = Mock(spec=Result)
     return response
 
-
   @classmethod
   def create_simple_success_response(cls):
     return cls.create_blank_response(ResponseCode.OK, 'OK')
@@ -99,7 +112,7 @@ class AuroraClientCommandTest(unittest.TestCase):
     mock_scheduler_client.scheduler.return_value = mock_scheduler
     mock_scheduler_client.url = "http://something_or_other"
     mock_api = Mock(spec=HookedAuroraClientAPI)
-    mock_api.scheduler = mock_scheduler_client
+    mock_api.scheduler_proxy = mock_scheduler_client
     return (mock_api, mock_scheduler_client)
 
   @classmethod

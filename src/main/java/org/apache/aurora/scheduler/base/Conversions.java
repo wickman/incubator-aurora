@@ -31,6 +31,7 @@ import com.google.common.collect.Multimaps;
 import org.apache.aurora.gen.Attribute;
 import org.apache.aurora.gen.HostAttributes;
 import org.apache.aurora.gen.ScheduleStatus;
+import org.apache.aurora.scheduler.configuration.ConfigurationManager;
 import org.apache.mesos.Protos;
 import org.apache.mesos.Protos.Offer;
 import org.apache.mesos.Protos.TaskState;
@@ -71,7 +72,8 @@ public final class Conversions {
 
   private static final Function<Protos.Attribute, String> ATTRIBUTE_NAME =
       new Function<Protos.Attribute, String>() {
-        @Override public String apply(Protos.Attribute attr) {
+        @Override
+        public String apply(Protos.Attribute attr) {
           return attr.getName();
         }
       };
@@ -85,7 +87,8 @@ public final class Conversions {
 
   private static final Function<Protos.Attribute, String> VALUE_CONVERTER =
       new Function<Protos.Attribute, String>() {
-        @Override public String apply(Protos.Attribute attribute) {
+        @Override
+        public String apply(Protos.Attribute attribute) {
           switch (attribute.getType()) {
             case SCALAR:
               return String.valueOf(attribute.getScalar().getValue());
@@ -101,7 +104,8 @@ public final class Conversions {
       };
 
   private static final AttributeConverter ATTRIBUTE_CONVERTER = new AttributeConverter() {
-    @Override public Attribute apply(Entry<String, Collection<Protos.Attribute>> entry) {
+    @Override
+    public Attribute apply(Entry<String, Collection<Protos.Attribute>> entry) {
       // Convert values and filter any that were ignored.
       return new Attribute(
           entry.getKey(),
@@ -130,5 +134,19 @@ public final class Conversions {
             .transform(ATTRIBUTE_CONVERTER)
             .toSet())
         .setSlaveId(offer.getSlaveId().getValue());
+  }
+
+  /**
+   * Determines whether an offer is associated with a slave that is dedicated, based on the presence
+   * of an attribute named {@link ConfigurationManager#DEDICATED_ATTRIBUTE}.
+   *
+   * @param offer Host resource offer.
+   * @return {@code true} of {@code offer} is associated with a dedicated slave, otherwise
+   *         {@code false}.
+   */
+  public static boolean isDedicated(Offer offer) {
+    return FluentIterable.from(offer.getAttributesList())
+        .transform(ATTRIBUTE_NAME)
+        .anyMatch(Predicates.equalTo(ConfigurationManager.DEDICATED_ATTRIBUTE));
   }
 }

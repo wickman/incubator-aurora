@@ -26,11 +26,6 @@ import os
 import threading
 import time
 
-from twitter.common.collections import OrderedDict
-from twitter.common.exceptions import ExceptionalThread
-from twitter.common.metrics import Observable
-from twitter.common.metrics.gauge import AtomicGauge
-from twitter.common.quantity import Amount, Time
 from apache.thermos.common.ckpt import CheckpointDispatcher
 from apache.thermos.common.path import TaskPath
 from apache.thermos.core.inspector import CheckpointInspector
@@ -52,6 +47,11 @@ import mesos_pb2 as mesos_pb
 import psutil
 from thrift.TSerialization import deserialize as thrift_deserialize
 from thrift.TSerialization import serialize as thrift_serialize
+from twitter.common.collections import OrderedDict
+from twitter.common.exceptions import ExceptionalThread
+from twitter.common.metrics import Observable
+from twitter.common.metrics.gauge import AtomicGauge
+from twitter.common.quantity import Amount, Time
 
 
 class ThermosGCExecutor(ThermosExecutorBase, ExceptionalThread, Observable):
@@ -343,7 +343,10 @@ class ThermosGCExecutor(ThermosExecutorBase, ExceptionalThread, Observable):
     directory_sandbox = DirectorySandbox(header_sandbox) if header_sandbox else None
     if directory_sandbox and directory_sandbox.exists():
       self.log('Destroying DirectorySandbox for %s' % task_id)
-      directory_sandbox.destroy()
+      try:
+        directory_sandbox.destroy()
+      except DirectorySandbox.Error as e:
+        self.log('Failed to destroy DirectorySandbox: %s' % e)
     else:
       self.log('Found no sandboxes for %s' % task_id)
 

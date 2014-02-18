@@ -27,9 +27,6 @@ from apache.aurora.admin.mesos_maintenance import MesosMaintenance
 from apache.aurora.client.api import AuroraClientAPI
 from apache.aurora.client.base import check_and_log_response, die, requires
 from apache.aurora.common.clusters import CLUSTERS
-from twitter.common import app, log
-from twitter.common.quantity import Amount, Data
-from twitter.common.quantity.parse_simple import parse_data
 
 from gen.apache.aurora.constants import ACTIVE_STATES, TERMINAL_STATES
 from gen.apache.aurora.ttypes import (
@@ -37,6 +34,10 @@ from gen.apache.aurora.ttypes import (
     ScheduleStatus,
     TaskQuery,
 )
+
+from twitter.common import app, log
+from twitter.common.quantity import Amount, Data
+from twitter.common.quantity.parse_simple import parse_data
 
 
 GROUPING_OPTION = optparse.Option(
@@ -51,7 +52,7 @@ GROUPING_OPTION = optparse.Option(
 
 
 def parse_hosts(options):
-  if not (options.filename or options.hosts):
+  if bool(options.filename) == bool(options.hosts):
     die('Please specify either --filename or --hosts')
   if options.filename:
     with open(options.filename, 'r') as hosts:
@@ -161,16 +162,22 @@ def query(args, options):
 
 
 @app.command
-@requires.exactly('cluster', 'role', 'cpu', 'ramMb', 'diskMb')
-def set_quota(cluster, role, cpu_str, ram_mb_str, disk_mb_str):
-  """usage: set_quota cluster role cpu ramMb diskMb
+@requires.exactly('cluster', 'role', 'cpu', 'ram', 'disk')
+def set_quota(cluster, role, cpu_str, ram, disk):
+  """usage: set_quota cluster role cpu ram[MGT] disk[MGT]
 
   Alters the amount of production quota allocated to a user.
   """
   try:
+    ram_size = parse_data(ram).as_(Data.MB)
+    disk_size = parse_data(disk).as_(Data.MB)
+  except ValueError:
+    log.error('Invalid unit specification')
+
+  try:
     cpu = float(cpu_str)
-    ram_mb = int(ram_mb_str)
-    disk_mb = int(disk_mb_str)
+    ram_mb = int(ram_size)
+    disk_mb = int(disk_size)
   except ValueError:
     log.error('Invalid value')
 
@@ -186,8 +193,8 @@ def set_quota(cluster, role, cpu_str, ram_mb_str, disk_mb_str):
     help='Comma separated list of hosts')
 @requires.exactly('cluster')
 def start_maintenance_hosts(cluster):
-  """usage: start_maintenance_hosts cluster [--filename=filename]
-                                            [--hosts=hosts]
+  """usage: start_maintenance_hosts {--filename=filename | --hosts=hosts}
+                                    cluster
   """
   options = app.get_options()
   MesosMaintenance(CLUSTERS[cluster], options.verbosity).start_maintenance(parse_hosts(options))
@@ -200,8 +207,8 @@ def start_maintenance_hosts(cluster):
     help='Comma separated list of hosts')
 @requires.exactly('cluster')
 def end_maintenance_hosts(cluster):
-  """usage: end_maintenance_hosts cluster [--filename=filename]
-                                          [--hosts=hosts]
+  """usage: end_maintenance_hosts {--filename=filename | --hosts=hosts}
+                                  cluster
   """
   options = app.get_options()
   MesosMaintenance(CLUSTERS[cluster], options.verbosity).end_maintenance(parse_hosts(options))
@@ -219,11 +226,11 @@ def end_maintenance_hosts(cluster):
 @app.command_option(GROUPING_OPTION)
 @requires.exactly('cluster')
 def perform_maintenance_hosts(cluster):
-  """usage: perform_maintenance cluster [--filename=filename]
-                                        [--hosts=hosts]
-                                        [--batch_size=num]
-                                        [--post_drain_script=path]
-                                        [--grouping=function]
+  """usage: perform_maintenance_hosts {--filename=filename | --hosts=hosts}
+                                      [--batch_size=num]
+                                      [--post_drain_script=path]
+                                      [--grouping=function]
+                                      cluster
 
   Asks the scheduler to remove any running tasks from the machine and remove it
   from service temporarily, perform some action on them, then return the machines
@@ -254,8 +261,8 @@ def perform_maintenance_hosts(cluster):
     help='Comma separated list of hosts')
 @requires.exactly('cluster')
 def host_maintenance_status(cluster):
-  """usage: host_maintenance_status cluster [--filename=filename]
-                                            [--hosts=hosts]
+  """usage: host_maintenance_status {--filename=filename | --hosts=hosts}
+                                    cluster
 
   Check on the schedulers maintenance status for a list of hosts in the cluster.
   """

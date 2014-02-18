@@ -101,7 +101,8 @@ public interface Storage {
   interface MutateWork<T, E extends Exception> {
 
     NoResult.Quiet NOOP = new NoResult.Quiet() {
-      @Override protected void execute(Storage.MutableStoreProvider storeProvider) {
+      @Override
+      protected void execute(Storage.MutableStoreProvider storeProvider) {
         // No-op.
       }
     };
@@ -132,7 +133,8 @@ public interface Storage {
      */
     abstract class NoResult<E extends Exception> implements MutateWork<Void, E> {
 
-      @Override public final Void apply(MutableStoreProvider storeProvider) throws E {
+      @Override
+      public final Void apply(MutableStoreProvider storeProvider) throws E {
         execute(storeProvider);
         return null;
       }
@@ -198,6 +200,10 @@ public interface Storage {
 
   /**
    * Executes the unit of mutating {@code work}.
+   * TODO(wfarner): Add a mechanism by which mutating work can add side-effect operations to be
+   * performed after completion of the outer-most transaction.  As it stands, it's somewhat
+   * futile to try to achieve this within a transaction, since the local code does not know
+   * if the current transaction is nested.
    *
    * @param work The unit of work to execute.
    * @param <T> The type of result this unit of work produces.
@@ -275,7 +281,8 @@ public interface Storage {
         final Query.Builder query) {
 
       return storage.consistentRead(new Work.Quiet<ImmutableSet<IScheduledTask>>() {
-        @Override public ImmutableSet<IScheduledTask> apply(StoreProvider storeProvider) {
+        @Override
+        public ImmutableSet<IScheduledTask> apply(StoreProvider storeProvider) {
           return storeProvider.getTaskStore().fetchTasks(query);
         }
       });
@@ -295,7 +302,8 @@ public interface Storage {
         final Query.Builder query) {
 
       return storage.weaklyConsistentRead(new Work.Quiet<ImmutableSet<IScheduledTask>>() {
-        @Override public ImmutableSet<IScheduledTask> apply(StoreProvider storeProvider) {
+        @Override
+        public ImmutableSet<IScheduledTask> apply(StoreProvider storeProvider) {
           return storeProvider.getTaskStore().fetchTasks(query);
         }
       });

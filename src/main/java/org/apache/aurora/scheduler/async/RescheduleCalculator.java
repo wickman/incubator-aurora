@@ -44,6 +44,7 @@ import org.apache.aurora.scheduler.storage.entities.ITaskEvent;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import static org.apache.aurora.gen.ScheduleStatus.DRAINING;
 import static org.apache.aurora.gen.ScheduleStatus.KILLING;
 import static org.apache.aurora.gen.ScheduleStatus.RESTARTING;
 
@@ -83,16 +84,18 @@ public interface RescheduleCalculator {
 
     private static final Function<ITaskEvent, ScheduleStatus> TO_STATUS =
         new Function<ITaskEvent, ScheduleStatus>() {
-          @Override public ScheduleStatus apply(ITaskEvent input) {
+          @Override
+          public ScheduleStatus apply(ITaskEvent input) {
             return input.getStatus();
           }
         };
 
     private static final Set<ScheduleStatus> INTERRUPTED_TASK_STATES =
-        EnumSet.of(RESTARTING, KILLING);
+        EnumSet.of(RESTARTING, KILLING, DRAINING);
 
     private final Predicate<IScheduledTask> flapped = new Predicate<IScheduledTask>() {
-      @Override public boolean apply(IScheduledTask task) {
+      @Override
+      public boolean apply(IScheduledTask task) {
         if (!task.isSetTaskEvents()) {
           return false;
         }

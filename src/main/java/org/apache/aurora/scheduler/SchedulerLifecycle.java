@@ -25,11 +25,9 @@ import javax.annotation.Nullable;
 import javax.inject.Inject;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
-import com.google.common.base.Supplier;
 import com.google.common.eventbus.Subscribe;
 import com.google.common.util.concurrent.Atomics;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -47,6 +45,7 @@ import com.twitter.common.zookeeper.Group.JoinException;
 import com.twitter.common.zookeeper.ServerSet;
 import com.twitter.common.zookeeper.SingletonService.LeaderControl;
 
+import org.apache.aurora.scheduler.Driver.SettableDriver;
 import org.apache.aurora.scheduler.events.EventSink;
 import org.apache.aurora.scheduler.events.PubsubEvent.DriverRegistered;
 import org.apache.aurora.scheduler.events.PubsubEvent.EventSubscriber;
@@ -97,13 +96,13 @@ public class SchedulerLifecycle implements EventSubscriber {
     PREPARING_STORAGE,
     STORAGE_PREPARED,
     LEADER_AWAITING_REGISTRATION,
-    REGISTERED_LEADER,
     ACTIVE,
     DEAD
   }
 
   private static final Predicate<Transition<State>> IS_DEAD = new Predicate<Transition<State>>() {
-    @Override public boolean apply(Transition<State> state) {
+    @Override
+    public boolean apply(Transition<State> state) {
       return state.getTo() == State.DEAD;
     }
   };
@@ -115,13 +114,18 @@ public class SchedulerLifecycle implements EventSubscriber {
   private final AtomicReference<LeaderControl> leaderControl = Atomics.newReference();
   private final StateMachine<State> stateMachine;
 
+  // The local driver reference, distinct from the global SettableDriver.
+  // This is used to perform actions with the driver (i.e. invoke start(), join()),
+  // which no other code should do.  It also permits us to save the reference until we are ready to
+  // make the driver ready by invoking SettableDriver.initialize().
+  private final AtomicReference<SchedulerDriver> driverRef = Atomics.newReference();
+
   @Inject
   SchedulerLifecycle(
       DriverFactory driverFactory,
       NonVolatileStorage storage,
       Lifecycle lifecycle,
-      Driver driver,
-      DriverReference driverRef,
+      SettableDriver driver,
       LeadingOptions leadingOptions,
       ScheduledExecutorService executorService,
       Clock clock,
@@ -132,7 +136,6 @@ public class SchedulerLifecycle implements EventSubscriber {
         storage,
         lifecycle,
         driver,
-        driverRef,
         new DefaultDelayedActions(leadingOptions, executorService),
         clock,
         eventSink);
@@ -192,10 +195,7 @@ public class SchedulerLifecycle implements EventSubscriber {
       final DriverFactory driverFactory,
       final NonVolatileStorage storage,
       final Lifecycle lifecycle,
-      // TODO(wfarner): The presence of Driver and DriverReference is quite confusing.  Figure out
-      //                a clean way to collapse the duties of DriverReference into DriverImpl.
-      final Driver driver,
-      final DriverReference driverRef,
+      final SettableDriver driver,
       final DelayedActions delayedActions,
       final Clock clock,
       final EventSink eventSink) {
@@ -204,51 +204,60 @@ public class SchedulerLifecycle implements EventSubscriber {
     checkNotNull(storage);
     checkNotNull(lifecycle);
     checkNotNull(driver);
-    checkNotNull(driverRef);
     checkNotNull(delayedActions);
     checkNotNull(clock);
     checkNotNull(eventSink);
 
     Stats.export(new StatImpl<Integer>("framework_registered") {
-      @Override public Integer read() {
+      @Override
+      public Integer read() {
         return registrationAcked.get() ? 1 : 0;
       }
     });
     for (final State state : State.values()) {
       Stats.export(new StatImpl<Integer>("scheduler_lifecycle_" + state) {
-        @Override public Integer read() {
+        @Override
+        public Integer read() {
           return (state == stateMachine.getState()) ? 1 : 0;
         }
       });
     }
 
     final Closure<Transition<State>> prepareStorage = new Closure<Transition<State>>() {
-      @Override public void execute(Transition<State> transition) {
+      @Override
+      public void execute(Transition<State> transition) {
         storage.prepare();
         stateMachine.transition(State.STORAGE_PREPARED);
       }
     };
 
     final Closure<Transition<State>> handleLeading = new Closure<Transition<State>>() {
-      @Override public void execute(Transition<State> transition) {
+      @Override
+      public void execute(Transition<State> transition) {
         LOG.info("Elected as leading scheduler!");
         storage.start(new MutateWork.NoResult.Quiet() {
-          @Override protected void execute(MutableStoreProvider storeProvider) {
+          @Override
+          protected void execute(MutableStoreProvider storeProvider) {
             StorageBackfill.backfill(storeProvider, clock);
           }
         });
 
         @Nullable final String frameworkId = storage.consistentRead(
             new Work.Quiet<String>() {
-              @Override public String apply(StoreProvider storeProvider) {
+              @Override
+              public String apply(StoreProvider storeProvider) {
                 return storeProvider.getSchedulerStore().fetchFrameworkId();
               }
             });
+
+        // Save the prepared driver locally, but don't expose it until the registered callback is
+        // received.
         driverRef.set(driverFactory.apply(frameworkId));
 
         delayedActions.onRegistrationTimeout(
             new Runnable() {
-              @Override public void run() {
+              @Override
+              public void run() {
                 if (!registrationAcked.get()) {
                   LOG.severe(
                       "Framework has not been registered within the tolerated delay.");
@@ -259,27 +268,31 @@ public class SchedulerLifecycle implements EventSubscriber {
 
         delayedActions.onAutoFailover(
             new Runnable() {
-              @Override public void run() {
+              @Override
+              public void run() {
                 LOG.info("Triggering automatic failover.");
                 stateMachine.transition(State.DEAD);
               }
             });
 
-        Protos.Status status = driver.start();
+        Protos.Status status = driverRef.get().start();
         LOG.info("Driver started with code " + status);
-        delayedActions.blockingDriverJoin(new Runnable() {
-          @Override public void run() {
-            // Blocks until driver exits.
-            driver.join();
-            stateMachine.transition(State.DEAD);
-          }
-        });
       }
     };
 
     final Closure<Transition<State>> handleRegistered = new Closure<Transition<State>>() {
-      @Override public void execute(Transition<State> transition) {
+      @Override
+      public void execute(Transition<State> transition) {
         registrationAcked.set(true);
+        driver.initialize(driverRef.get());
+        delayedActions.blockingDriverJoin(new Runnable() {
+          @Override
+          public void run() {
+            // Blocks until driver exits.
+            driverRef.get().join();
+            stateMachine.transition(State.DEAD);
+          }
+        });
 
         // This action sequence must be deferred due to a subtle detail of how guava's EventBus
         // works. EventBus event handlers are guaranteed to not be reentrant, meaning that posting
@@ -307,7 +320,8 @@ public class SchedulerLifecycle implements EventSubscriber {
         // The latter is preferable since it makes it easier to reason about the state of an
         // announced scheduler.
         delayedActions.onRegistered(new Runnable() {
-          @Override public void run() {
+          @Override
+          public void run() {
             eventSink.post(new SchedulerActive());
             try {
               leaderControl.get().advertise();
@@ -326,7 +340,8 @@ public class SchedulerLifecycle implements EventSubscriber {
 
     final Closure<Transition<State>> shutDown = new Closure<Transition<State>>() {
       private final AtomicBoolean invoked = new AtomicBoolean(false);
-      @Override public void execute(Transition<State> transition) {
+      @Override
+      public void execute(Transition<State> transition) {
         if (!invoked.compareAndSet(false, true)) {
           LOG.info("Shutdown already invoked, ignoring extra call.");
           return;
@@ -373,9 +388,6 @@ public class SchedulerLifecycle implements EventSubscriber {
         .addState(
             dieOnError(Closures.filter(NOT_DEAD, handleRegistered)),
             State.LEADER_AWAITING_REGISTRATION,
-            State.REGISTERED_LEADER, State.DEAD)
-        .addState(
-            State.REGISTERED_LEADER,
             State.ACTIVE, State.DEAD)
         .addState(
             State.ACTIVE,
@@ -394,7 +406,8 @@ public class SchedulerLifecycle implements EventSubscriber {
 
   private Closure<Transition<State>> dieOnError(final Closure<Transition<State>> closure) {
     return new Closure<Transition<State>>() {
-      @Override public void execute(Transition<State> transition) {
+      @Override
+      public void execute(Transition<State> transition) {
         try {
           closure.execute(transition);
         } catch (RuntimeException e) {
@@ -419,22 +432,7 @@ public class SchedulerLifecycle implements EventSubscriber {
 
   @Subscribe
   public void registered(DriverRegistered event) {
-    stateMachine.transition(State.REGISTERED_LEADER);
-  }
-
-  /**
-   * Maintains a reference to the driver.
-   */
-  static class DriverReference implements Supplier<Optional<SchedulerDriver>> {
-    private final AtomicReference<SchedulerDriver> driver = Atomics.newReference();
-
-    @Override public Optional<SchedulerDriver> get() {
-      return Optional.fromNullable(driver.get());
-    }
-
-    private void set(SchedulerDriver ref) {
-      driver.set(ref);
-    }
+    stateMachine.transition(State.ACTIVE);
   }
 
   private static class SchedulerCandidateImpl implements LeadershipListener {
@@ -449,12 +447,14 @@ public class SchedulerLifecycle implements EventSubscriber {
       this.leaderControl = leaderControl;
     }
 
-    @Override public void onLeading(LeaderControl control) {
+    @Override
+    public void onLeading(LeaderControl control) {
       leaderControl.set(control);
       stateMachine.transition(State.LEADER_AWAITING_REGISTRATION);
     }
 
-    @Override public void onDefeated(@Nullable ServerSet.EndpointStatus status) {
+    @Override
+    public void onDefeated(@Nullable ServerSet.EndpointStatus status) {
       LOG.severe("Lost leadership, committing suicide.");
       stateMachine.transition(State.DEAD);
     }

@@ -78,15 +78,17 @@ public class ServletModule extends AbstractModule {
         }
       }
 
-      @Override protected void configureServlets() {
+      @Override
+      protected void configureServlets() {
         bind(HttpStatsFilter.class).in(Singleton.class);
         filter("/scheduler*").through(HttpStatsFilter.class);
+        bind(LeaderRedirectFilter.class).in(Singleton.class);
         // Servlets may assign a special meaning to trailing /, but this confuses AngularJS's
         // resource loader. So, removing them for /scheduler* URLs using a UIRedirectFilter.
         // TODO (skarumuri): Remove UIRedirectFilter when the /scheduler servlets are removed.
         bind(UIRedirectFilter.class).in(Singleton.class);
+        filter("/scheduler").through(LeaderRedirectFilter.class);
         filter("/scheduler*").through(UIRedirectFilter.class);
-        bind(LeaderRedirectFilter.class).in(Singleton.class);
 
         registerJerseyEndpoint("/cron", Cron.class);
         registerJerseyEndpoint("/maintenance", Maintenance.class);
@@ -244,7 +246,8 @@ public class ServletModule extends AbstractModule {
       this.redirector = Preconditions.checkNotNull(redirector);
     }
 
-    @Override public void execute() throws MonitorException {
+    @Override
+    public void execute() throws MonitorException {
       redirector.monitor();
     }
   }

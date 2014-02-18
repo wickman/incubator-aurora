@@ -17,19 +17,17 @@
 # Wrapper script for self-bootstrapping rbt.
 set -e
 
-# TODO(kevints): Pin to stable version after patch --commit is available.
-# Stable version of the release-0.5.x branch
-RBTOOLS_VERSION=51b488bc72686c7db46189e4b41eae42a5500cc8
-if ! [ -f build-support/rbtools/BOOTSTRAPPED ] || \
-    [ x`cat build-support/rbtools/BOOTSTRAPPED` != x$RBTOOLS_VERSION ]; then
+RBTOOLS_VERSION=0.5.5
+if ! [ -f build-support/rbt.venv/BOOTSTRAPPED ] || \
+    [ x`cat build-support/rbt.venv/BOOTSTRAPPED` != x$RBTOOLS_VERSION ]; then
 
   echo Bootstrapping rbtools @ $RBTOOLS_VERSION
-  rm -fr build-support/rbtools
-  ./build-support/virtualenv build-support/rbtools
-  source build-support/rbtools/bin/activate
-  pip install -e "git+https://github.com/reviewboard/rbtools@$RBTOOLS_VERSION#egg=RBTools"
-  echo $RBTOOLS_VERSION > build-support/rbtools/BOOTSTRAPPED
+  rm -fr build-support/rbt.venv
+  ./build-support/virtualenv build-support/rbt.venv
+  source build-support/rbt.venv/bin/activate
+  pip install "RBTools==$RBTOOLS_VERSION"
+  echo $RBTOOLS_VERSION > build-support/rbt.venv/BOOTSTRAPPED
 fi
-source build-support/rbtools/bin/activate
+source build-support/rbt.venv/bin/activate
 # TODO(kevints): Use ./pants py here instead of virtualenv.
 exec rbt "$@"

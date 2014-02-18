@@ -15,7 +15,6 @@
  */
 package org.apache.aurora.scheduler.storage;
 
-import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import com.google.common.base.Preconditions;
@@ -25,7 +24,7 @@ import com.google.common.base.Preconditions;
  * a read-locked thread to a write-locked thread, which would otherwise deadlock.
  */
 public class ReadWriteLockManager {
-  private final ReadWriteLock lock = new ReentrantReadWriteLock();
+  private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
   enum LockMode {
     NONE,
@@ -60,7 +59,8 @@ public class ReadWriteLockManager {
   }
 
   private final ThreadLocal<LockState> lockState = new ThreadLocal<LockState>() {
-    @Override protected LockState initialValue() {
+    @Override
+    protected LockState initialValue() {
       return new LockState();
     }
   };
@@ -104,5 +104,15 @@ public class ReadWriteLockManager {
   public void writeUnlock() {
     lock.writeLock().unlock();
     lockState.get().lockReleased(LockMode.WRITE);
+  }
+
+  /**
+   * Gets an approximation for the number of threads waiting to acquire the read or write lock.
+   *
+   * @see ReentrantReadWriteLock#getQueueLength()
+   * @return The estimated number of threads waiting for this lock.
+   */
+  public int getQueueLength() {
+    return lock.getQueueLength();
   }
 }

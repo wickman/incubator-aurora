@@ -69,7 +69,8 @@ class TaskTimeout implements EventSubscriber {
       ScheduleStatus.ASSIGNED,
       ScheduleStatus.PREEMPTING,
       ScheduleStatus.RESTARTING,
-      ScheduleStatus.KILLING);
+      ScheduleStatus.KILLING,
+      ScheduleStatus.DRAINING);
 
   private final Map<TimeoutKey, Context> futures = Maps.newConcurrentMap();
 
@@ -172,7 +173,8 @@ class TaskTimeout implements EventSubscriber {
       this.key = key;
     }
 
-    @Override public void run() {
+    @Override
+    public void run() {
       Context context = futures.get(key);
       try {
         if (context == null) {
@@ -213,7 +215,8 @@ class TaskTimeout implements EventSubscriber {
   }
 
   private static final Function<Context, Long> CONTEXT_TIMESTAMP = new Function<Context, Long>() {
-    @Override public Long apply(Context context) {
+    @Override
+    public Long apply(Context context) {
       return context.timestampMillis;
     }
   };
@@ -228,7 +231,8 @@ class TaskTimeout implements EventSubscriber {
 
   private void exportStats(StatsProvider statsProvider) {
     statsProvider.makeGauge(TRANSIENT_COUNT_STAT_NAME, new Supplier<Number>() {
-      @Override public Number get() {
+      @Override
+      public Number get() {
           return futures.size();
         }
     });
@@ -236,12 +240,14 @@ class TaskTimeout implements EventSubscriber {
     for (final ScheduleStatus status : TRANSIENT_STATES) {
       statsProvider.makeGauge(waitingTimeStatName(status), new Supplier<Number>() {
         private final Predicate<TimeoutKey> statusMatcher = new Predicate<TimeoutKey>() {
-          @Override public boolean apply(TimeoutKey key) {
+          @Override
+          public boolean apply(TimeoutKey key) {
             return key.status == status;
           }
         };
 
-        @Override public Number get() {
+        @Override
+        public Number get() {
           Iterable<Context> matches = Maps.filterKeys(futures, statusMatcher).values();
           if (Iterables.isEmpty(matches)) {
             return 0L;

@@ -49,6 +49,7 @@ import org.apache.aurora.scheduler.async.RescheduleCalculator.RescheduleCalculat
 import org.apache.aurora.scheduler.async.TaskGroups.TaskGroupsSettings;
 import org.apache.aurora.scheduler.async.TaskScheduler.TaskSchedulerImpl;
 import org.apache.aurora.scheduler.events.PubsubEventModule;
+import org.apache.aurora.scheduler.filter.CachedJobState;
 
 import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.ElementType.METHOD;
@@ -130,7 +131,11 @@ public class AsyncModule extends AbstractModule {
   private static final Arg<Boolean> ENABLE_PREEMPTOR = Arg.create(true);
 
   private static final Preemptor NULL_PREEMPTOR = new Preemptor() {
-    @Override public Optional<String> findPreemptionSlotFor(String taskId) {
+    @Override
+    public Optional<String> findPreemptionSlotFor(
+        String taskId,
+        CachedJobState cachedJobState) {
+
       return Optional.absent();
     }
   };
@@ -155,7 +160,8 @@ public class AsyncModule extends AbstractModule {
         new ThreadFactoryBuilder().setNameFormat("AsyncProcessor-%d").setDaemon(true).build());
     Stats.exportSize("timeout_queue_size", executor.getQueue());
     Stats.export(new StatImpl<Long>("async_tasks_completed") {
-      @Override public Long read() {
+      @Override
+      public Long read() {
         return executor.getCompletedTaskCount();
       }
     });
@@ -163,7 +169,8 @@ public class AsyncModule extends AbstractModule {
     // AsyncModule itself is not a subclass of PrivateModule because TaskEventModule internally uses
     // a MultiBinder, which cannot span multiple injectors.
     install(new PrivateModule() {
-      @Override protected void configure() {
+      @Override
+      protected void configure() {
         bind(new TypeLiteral<Amount<Long, Time>>() { })
             .toInstance(TRANSIENT_TASK_STATE_TIMEOUT.get());
         bind(ScheduledExecutorService.class).toInstance(executor);
@@ -176,7 +183,8 @@ public class AsyncModule extends AbstractModule {
     PubsubEventModule.bindSubscriber(binder(), TaskTimeout.class);
 
     install(new PrivateModule() {
-      @Override protected void configure() {
+      @Override
+      protected void configure() {
         bind(TaskGroupsSettings.class).toInstance(new TaskGroupsSettings(
             new TruncatedBinaryBackoff(INITIAL_SCHEDULE_DELAY.get(), MAX_SCHEDULE_DELAY.get()),
             RateLimiter.create(MAX_SCHEDULE_ATTEMPTS_PER_SEC.get())));
@@ -208,7 +216,8 @@ public class AsyncModule extends AbstractModule {
     PubsubEventModule.bindSubscriber(binder(), TaskGroups.class);
 
     install(new PrivateModule() {
-      @Override protected void configure() {
+      @Override
+      protected void configure() {
         bind(OfferReturnDelay.class).to(RandomJitterReturnDelay.class);
         bind(ScheduledExecutorService.class).toInstance(executor);
         bind(OfferQueue.class).to(OfferQueueImpl.class);
@@ -219,7 +228,8 @@ public class AsyncModule extends AbstractModule {
     PubsubEventModule.bindSubscriber(binder(), OfferQueue.class);
 
     install(new PrivateModule() {
-      @Override protected void configure() {
+      @Override
+      protected void configure() {
         // TODO(ksweeney): Create a configuration validator module so this can be injected.
         // TODO(William Farner): Revert this once large task counts is cheap ala hierarchichal store
         bind(Integer.class).annotatedWith(PruneThreshold.class).toInstance(100);
@@ -234,7 +244,8 @@ public class AsyncModule extends AbstractModule {
     PubsubEventModule.bindSubscriber(binder(), HistoryPruner.class);
 
     install(new PrivateModule() {
-      @Override protected void configure() {
+      @Override
+      protected void configure() {
         bind(ScheduledExecutorService.class).toInstance(executor);
         bind(TaskThrottler.class).in(Singleton.class);
         expose(TaskThrottler.class);
@@ -255,7 +266,8 @@ public class AsyncModule extends AbstractModule {
       final Key<Preemptor> preemptorKey,
       final Amount<Long, Time> reservationDuration) {
         binder.install(new PrivateModule() {
-          @Override protected void configure() {
+          @Override
+          protected void configure() {
             bind(Preemptor.class).to(preemptorKey);
             bind(new TypeLiteral<Amount<Long, Time>>() { }).annotatedWith(ReservationDuration.class)
                 .toInstance(reservationDuration);
@@ -276,7 +288,8 @@ public class AsyncModule extends AbstractModule {
     private final int minHoldTimeMs = MIN_OFFER_HOLD_TIME.get().as(Time.MILLISECONDS);
     private final Random random = new Random.SystemRandom(new java.util.Random());
 
-    @Override public Amount<Integer, Time> get() {
+    @Override
+    public Amount<Integer, Time> get() {
       return Amount.of(minHoldTimeMs + random.nextInt(JITTER_WINDOW_MS), Time.MILLISECONDS);
     }
   }

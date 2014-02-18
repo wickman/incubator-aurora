@@ -30,6 +30,7 @@ from gen.apache.aurora.ttypes import (
 
 from .restarter import Restarter
 from .scheduler_client import SchedulerProxy
+from .sla import Sla
 from .updater import Updater
 
 
@@ -62,8 +63,8 @@ class AuroraClientAPI(object):
     log.debug('Lock %s' % lock)
     return self._scheduler_proxy.createJob(config.job(), lock)
 
-  def populate_job_config(self, config, validation=None):
-    return self._scheduler_proxy.populateJobConfig(config.job(), validation)
+  def populate_job_config(self, config):
+    return self._scheduler_proxy.populateJobConfig(config.job())
 
   def start_cronjob(self, job_key):
     self._assert_valid_job_key(job_key)
@@ -158,10 +159,10 @@ class AuroraClientAPI(object):
     log.info("Getting quota for: %s" % role)
     return self._scheduler_proxy.getQuota(role)
 
-  def set_quota(self, role, cpu, ram_mb, disk_mb):
-    log.info("Setting quota for user:%s cpu:%f ram_mb:%d disk_mb: %d"
-              % (role, cpu, ram_mb, disk_mb))
-    return self._scheduler_proxy.setQuota(role, Quota(cpu, ram_mb, disk_mb))
+  def set_quota(self, role, cpu, ram, disk):
+    log.info("Setting quota for user:%s cpu:%f ram:%d disk: %d"
+              % (role, cpu, ram, disk))
+    return self._scheduler_proxy.setQuota(role, Quota(cpu, ram, disk))
 
   def force_task_state(self, task_id, status):
     log.info("Requesting that task %s transition to state %s" % (task_id, status))
@@ -193,6 +194,10 @@ class AuroraClientAPI(object):
 
   def unsafe_rewrite_config(self, rewrite_request):
     return self._scheduler_proxy.rewriteConfigs(rewrite_request)
+
+  def sla_get_job_uptime_vector(self, job_key):
+    self._assert_valid_job_key(job_key)
+    return Sla(self._scheduler_proxy).get_job_uptime_vector(job_key)
 
   def _assert_valid_job_key(self, job_key):
     if not isinstance(job_key, AuroraJobKey):

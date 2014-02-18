@@ -16,15 +16,42 @@
 
 python_binary(
   name='client',
-  entry_point = 'apache.aurora.cli:main',
-  dependencies = [ pants(':cli') ],
-  )
+  entry_point = 'apache.aurora.client.cli.client:proxy_main',
+  dependencies = [
+    pants(':client_lib')
+  ],
+)
+
+python_library(
+  name = 'bridge',
+  sources = ['bridge.py']
+)
+
+python_library(
+  name = 'client_lib',
+  sources = [ 'client.py' ],
+  dependencies = [
+    pants(':cli'),
+    pants(':bridge'),
+    pants('src/main/python/apache/aurora/client/bin:aurora_client_lib')
+  ]
+)
 
 python_library(
   name='cli',
-  sources = [ '__init__.py', 'context.py', 'jobs.py', 'options.py' ],
+  sources = [
+    '__init__.py',
+    'context.py',
+    'jobs.py',
+    'options.py',
+    'quota.py',
+    'sla.py',
+    'task.py'
+  ],
   dependencies = [
-    pants('aurora/twitterdeps/src/python/twitter/common/python'),
+    pants('3rdparty/python:argparse'),
+    pants('3rdparty/python:twitter.common.python'),
+    pants('3rdparty/python:twitter.common.quantity'),
     pants('src/main/python/apache/aurora/client/api:command_runner'),
     pants('src/main/python/apache/aurora/client/api:disambiguator'),
     pants('src/main/python/apache/aurora/client/api:job_monitor'),
@@ -36,6 +63,5 @@ python_library(
     pants('src/main/python/apache/aurora/client:options'),
     pants('src/main/python/apache/aurora/common'),
     pants('src/main/thrift/org/apache/aurora/gen:py-thrift'),
-    pants('src/main/python/apache/aurora:argparse')
-    ]
-  )
+  ],
+)
