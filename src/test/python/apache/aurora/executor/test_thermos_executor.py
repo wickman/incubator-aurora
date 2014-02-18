@@ -42,7 +42,7 @@ from apache.aurora.executor.thermos_task_runner import (
     DefaultThermosTaskRunnerProvider,
     ThermosTaskRunner,
 )
-from apache.aurora.executor.thermos_executor import ThermosExecutor
+from apache.aurora.executor.aurora_executor import AuroraExecutor
 from apache.thermos.common.path import TaskPath
 from apache.thermos.core.runner import TaskRunner
 from apache.thermos.monitoring.monitor import TaskMonitor
@@ -71,7 +71,7 @@ if 'THERMOS_DEBUG' in os.environ:
   log.init('executor_logger')
 
 
-class FastThermosExecutor(ThermosExecutor):
+class FastThermosExecutor(AuroraExecutor):
   STOP_WAIT = Amount(0, Time.SECONDS)
 
 
@@ -284,7 +284,7 @@ class TestThermosExecutor(object):
     proxy_driver = ProxyDriver()
 
     with temporary_dir() as tempdir:
-      te = ThermosExecutor(
+      te = AuroraExecutor(
           runner_provider=make_provider(tempdir),
           sandbox_provider=DefaultTestSandboxProvider)
       te.launchTask(proxy_driver, make_task(HELLO_WORLD_MTI))
@@ -306,7 +306,7 @@ class TestThermosExecutor(object):
     proxy_driver = ProxyDriver()
 
     with temporary_dir() as tempdir:
-      te = ThermosExecutor(
+      te = AuroraExecutor(
           runner_provider=make_provider(tempdir),
           sandbox_provider=DefaultTestSandboxProvider)
       te.launchTask(proxy_driver, make_task(MESOS_JOB(task=HELLO_WORLD), instanceId=0))
@@ -531,7 +531,7 @@ class TestThermosExecutor(object):
 def test_waiting_executor():
   proxy_driver = ProxyDriver()
   with temporary_dir() as checkpoint_root:
-    te = ThermosExecutor(
+    te = AuroraExecutor(
         runner_provider=make_provider(checkpoint_root),
         sandbox_provider=DefaultTestSandboxProvider)
     ExecutorTimeout(te.launched, proxy_driver, timeout=Amount(100, Time.MILLISECONDS)).start()

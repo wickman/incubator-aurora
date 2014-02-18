@@ -28,7 +28,7 @@ from .common.task_runner import (
     TaskRunner,
     TaskRunnerProvider,
 )
-from .executor_base import ThermosExecutorBase
+from .executor_base import ExecutorBase
 from .status_manager import StatusManager
 
 import mesos_pb2 as mesos_pb
@@ -47,7 +47,7 @@ class DefaultSandboxProvider(SandboxProvider):
         assigned_task.task.owner.role)
 
 
-class ThermosExecutor(Observable, ThermosExecutorBase):
+class AuroraExecutor(ExecutorBase, Observable):
   PERSISTENCE_WAIT = Amount(5, Time.SECONDS)
   SANDBOX_INITIALIZATION_TIMEOUT = Amount(10, Time.MINUTES)
   START_TIMEOUT = Amount(2, Time.MINUTES)
@@ -61,7 +61,7 @@ class ThermosExecutor(Observable, ThermosExecutorBase):
                status_providers=(),
                clock=time):
 
-    ThermosExecutorBase.__init__(self)
+    ExecutorBase.__init__(self)
     if not isinstance(runner_provider, TaskRunnerProvider):
       raise TypeError('runner_provider must be a TaskRunnerProvider, got %s' %
           type(runner_provider))
