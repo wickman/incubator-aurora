@@ -23,14 +23,39 @@ slave.
 
 import os
 
-from apache.aurora.executor.common.executor_timeout import ExecutorTimeout
-from apache.aurora.executor.common.health_checker import HealthCheckerProvider
 from apache.aurora.executor.aurora_executor import AuroraExecutor
-from apache.aurora.executor.thermos_task_runner import DefaultThermosTaskRunnerProvider
+from apache.aurora.executor.common.executor_timeout import ExecutorTimeout
+from apache.aurora.executor.common.sandbox import PkgResourcesSandboxProvider
+from apache.aurora.executor.common.status_checker import PkgResourcesStatusCheckerProvider
+from apache.aurora.executor.common.task_runner import PkgResourcesTaskRunnerProvider
 
 import mesos
 from twitter.common import app, log
 from twitter.common.log.options import LogOptions
+
+
+app.add_option(
+    '--runner_provider',
+    dest='runner_providers',
+    default=['apache.aurora.executor.thermos_task_runner:DefaultThermosTaskRunnerProvider'],
+    action='append',
+    help='Specify an additional task runner provider entry point for this executor.')
+
+
+app.add_option(
+    '--status_provider',
+    dest='status_providers',
+    default=['apache.aurora.executor.common.health_checker:HealthCheckerProvider'],
+    action='append',
+    help='Specify an additional task runner provider entry point for this executor.')
+
+
+app.add_option(
+    '--sandbox_provider',
+    dest='sandbox_providers',
+    default=['apache.aurora.executor.aurora_executor:DefaultSandboxProvider'],
+    action='append',
+    help='Specify an additional task runner provider entry point for this executor.')
 
 
 app.configure(debug=True)
@@ -55,16 +80,23 @@ def dump_runner_pex():
 
 
 def proxy_main():
-  def main():
+  def main(_, options):
+    runner_provider = PkgResourcesTaskRunnerProvider(options.runner_providers)
+    sandbox_providers = PkgResourcesSandboxProvider(options.sandbox_providers)
+    chained_status_provider = PkgResourcesStatusCheckerProvider(options.status_providers)
+
+    """
     thermos_runner_provider = DefaultThermosTaskRunnerProvider(
         dump_runner_pex(),
         artifact_dir=os.path.realpath('.'),
     )
+    """
 
     # Create executor stub
     thermos_executor = AuroraExecutor(
-        runner_provider=thermos_runner_provider,
-        status_providers=(HealthCheckerProvider(),),
+        runner_provider=runner_provider,
+        sandbox_provider=sandbox_providers,
+        status_providers=(chained_status_provider,),
     )
 
     # Create driver stub

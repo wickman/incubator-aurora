@@ -57,7 +57,7 @@ class AuroraExecutor(ExecutorBase, Observable):
   def __init__(self,
                runner_provider,
                status_manager_class=StatusManager,
-               sandbox_provider=DefaultSandboxProvider,
+               sandbox_provider=DefaultSandboxProvider(),
                status_providers=(),
                clock=time):
 
@@ -73,7 +73,7 @@ class AuroraExecutor(ExecutorBase, Observable):
     self._status_manager = None
     self._status_manager_class = status_manager_class
     self._sandbox = None
-    self._sandbox_provider = sandbox_provider()
+    self._sandbox_provider = sandbox_provider
     self._kill_manager = KillManager()
     # Events that are exposed for interested entities
     self.runner_aborted = threading.Event()

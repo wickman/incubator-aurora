@@ -54,7 +54,7 @@ class SandboxInterface(Interface):
 
 
 class SandboxProvider(Interface):
-  class Error(Exception): pass
+  class InvalidTask(Exception): pass
 
   @abstractmethod
   def from_assigned_task(self, assigned_task):
@@ -70,7 +70,7 @@ class PkgResourcesSandboxProvider(SandboxProvider):
     for ep in self.__candidate_entry_points:
       try:
         return ep.from_assigned_task(assigned_task)
-      except SandboxProvider.Error as e:
+      except SandboxProvider.InvalidTask as e:
         log.debug('%s does not match task: %r' % (ep, e))
         continue
     raise self.Error('No matching sandbox providers for task!')

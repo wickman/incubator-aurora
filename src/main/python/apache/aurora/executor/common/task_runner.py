@@ -16,9 +16,10 @@
 
 from abc import abstractmethod
 
-from twitter.common.lang import Interface
-
+from .entry_point import get_validated_entry_point
 from .status_checker import StatusChecker
+
+from twitter.common.lang import Interface
 
 
 class TaskError(Exception):
@@ -31,6 +32,23 @@ class TaskRunner(StatusChecker):
 
 
 class TaskRunnerProvider(Interface):
+  class InvalidTask(Exception): pass
+
   @abstractmethod
   def from_assigned_task(self, assigned_task, sandbox):
     pass
+
+
+class PkgResourcesTaskRunnerProvider(TaskRunnerProvider):
+  def __init__(self, candidate_entry_points):
+    self.__candidate_entry_points = [
+        get_validated_entry_point(ep, TaskRunnerProvider) for ep in candidate_entry_points]
+
+  def from_assigned_task(self, assigned_task, sandbox):
+    for ep in self.__candidate_entry_points:
+      try:
+        return ep.from_assigned_task(assigned_task, sandbox)
+      except TaskRunnerProvider.InvalidTask as e:
+        log.debug('%s does not match task: %r' % (ep, e))
+        continue
+    raise self.Error('No matching runner providers for task!')

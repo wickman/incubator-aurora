@@ -30,6 +30,7 @@ from .task_info import mesos_task_instance_from_assigned_task, resolve_ports
 from twitter.common import log
 from twitter.common.exceptions import ExceptionalThread
 
+
 class HealthCheckerThread(StatusChecker, ExceptionalThread):
   """Generic, StatusChecker-conforming thread for arbitrary periodic health checks
 

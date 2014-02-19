@@ -16,6 +16,8 @@
 
 from abc import abstractmethod, abstractproperty
 
+from .entry_point import get_validated_entry_point
+
 from twitter.common import log
 from twitter.common.lang import Interface
 from twitter.common.metrics import NamedGauge, Observable
@@ -84,6 +86,8 @@ class StatusChecker(Observable, Interface):
 
 
 class StatusCheckerProvider(Interface):
+  class InvalidTask(Exception): pass
+
   @abstractmethod
   def from_assigned_task(self, assigned_task, sandbox):
     pass
@@ -124,3 +128,21 @@ class ChainedStatusChecker(StatusChecker):
   def stop(self):
     for status_checker in self._status_checkers:
       status_checker.stop()
+
+
+class PkgResourcesStatusCheckerProvider(StatusCheckerProvider):
+  def __init__(self, candidate_entry_points):
+    self.__candidate_entry_points = [
+        get_validated_entry_point(ep, StatusCheckerProvider) for ep in candidate_entry_points]
+
+  def from_assigned_task(self, assigned_task, sandbox):
+    checkers = []
+  
+    for ep in self.__candidate_entry_points:
+      try:
+        checkers.append(ep.from_assigned_task(assigned_task, sandbox))
+      except StatusCheckerProvider.InvalidTask as e:
+        log.debug('%s does not match task: %r' % (ep, e))
+        continue
+
+    return ChainedStatusChecker(checkers)
