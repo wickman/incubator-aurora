@@ -20,6 +20,8 @@ import grp
 import os
 import pwd
 
+from .entry_point import get_validated_entry_point
+
 from twitter.common import log
 from twitter.common.dirutil import safe_mkdir, safe_rmtree
 from twitter.common.lang import Interface
@@ -52,9 +54,26 @@ class SandboxInterface(Interface):
 
 
 class SandboxProvider(Interface):
+  class Error(Exception): pass
+
   @abstractmethod
   def from_assigned_task(self, assigned_task):
     """Return the appropriate Sandbox implementation from an AssignedTask."""
+
+
+class PkgResourcesSandboxProvider(SandboxProvider):
+  def __init__(self, candidate_entry_points):
+    self.__candidate_entry_points = [
+        get_validated_entry_point(ep, SandboxProvider) for ep in candidate_entry_points]
+
+  def from_assigned_task(self, assigned_task):
+    for ep in self.__candidate_entry_points:
+      try:
+        return ep.from_assigned_task(assigned_task)
+      except SandboxProvider.Error as e:
+        log.debug('%s does not match task: %r' % (ep, e))
+        continue
+    raise self.Error('No matching sandbox providers for task!')
 
 
 class DirectorySandbox(SandboxInterface):

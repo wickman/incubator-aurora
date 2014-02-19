@@ -25,6 +25,11 @@ python_library(
 )
 
 python_library(
+  name = 'entry_point',
+  sources = ['entry_point.py'],
+)
+
+python_library(
   name = 'task_runner',
   sources = ['task_runner.py'],
   dependencies = [
@@ -67,6 +72,7 @@ python_library(
   name = 'sandbox',
   sources = ['sandbox.py'],
   dependencies = [
+    pants(':entry_point'),
     pants('3rdparty/python:twitter.common.dirutil'),
     pants('3rdparty/python:twitter.common.log'),
   ]
