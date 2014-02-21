@@ -39,14 +39,14 @@ def get_validated_entry_point(entry_point_str, interface):
     entry_module = __import__(module, globals(), globals(), [__name__])
   except ImportError as e:
     raise EntryPointError('Could not find entry point: %r' % e)
-  
+
   entry_point = getattr(entry_module, attribute, None)
-  
+
   if entry_point is None:
     raise EntryPointError('Could not find entry point: %r' % attribute)
-  
+
   if not issubclass(entry_point, interface):
     raise EntryPointError('Entry point %r = %r is not of the expected type %r' % (
         entry_point_str, entry_point, interface))
-  
+
   return entry_point

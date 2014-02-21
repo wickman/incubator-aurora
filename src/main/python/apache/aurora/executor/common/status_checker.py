@@ -137,7 +137,7 @@ class PkgResourcesStatusCheckerProvider(StatusCheckerProvider):
 
   def from_assigned_task(self, assigned_task, sandbox):
     checkers = []
-  
+
     for ep in self.__candidate_entry_points:
       try:
         checkers.append(ep.from_assigned_task(assigned_task, sandbox))
