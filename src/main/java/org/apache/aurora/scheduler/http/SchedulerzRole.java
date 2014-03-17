@@ -41,6 +41,7 @@ import com.twitter.common.base.Closure;
 import org.antlr.stringtemplate.StringTemplate;
 import org.apache.aurora.gen.CronCollisionPolicy;
 import org.apache.aurora.scheduler.base.JobKeys;
+import org.apache.aurora.scheduler.base.Jobs;
 import org.apache.aurora.scheduler.base.Query;
 import org.apache.aurora.scheduler.base.Tasks;
 import org.apache.aurora.scheduler.cron.CronPredictor;
@@ -50,6 +51,7 @@ import org.apache.aurora.scheduler.state.CronJobManager;
 import org.apache.aurora.scheduler.storage.Storage;
 import org.apache.aurora.scheduler.storage.entities.IJobConfiguration;
 import org.apache.aurora.scheduler.storage.entities.IJobKey;
+import org.apache.aurora.scheduler.storage.entities.IJobStats;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
 import org.apache.aurora.scheduler.storage.entities.IServerInfo;
 import org.apache.aurora.scheduler.storage.entities.ITaskConfig;
@@ -223,6 +225,12 @@ public class SchedulerzRole extends JerseyTemplateServlet {
             } else {
               job.type = JobType.ADHOC;
             }
+
+            IJobStats stats = Jobs.getJobStats(tasks);
+            job.pendingTaskCount = stats.getPendingTaskCount();
+            job.activeTaskCount = stats.getActiveTaskCount();
+            job.failedTaskCount = stats.getFailedTaskCount();
+            job.finishedTaskCount = stats.getFinishedTaskCount();
 
             return job;
           }
