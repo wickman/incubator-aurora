@@ -57,8 +57,8 @@ from apache.aurora.client.options import (
     WAIT_UNTIL_OPTION)
 from apache.aurora.common.aurora_job_key import AuroraJobKey
 
-from gen.apache.aurora.constants import ACTIVE_STATES, CURRENT_API_VERSION, AURORA_EXECUTOR_NAME
-from gen.apache.aurora.ttypes import ExecutorConfig, ResponseCode, ScheduleStatus
+from gen.apache.aurora.api.constants import ACTIVE_STATES, CURRENT_API_VERSION, AURORA_EXECUTOR_NAME
+from gen.apache.aurora.api.ttypes import ExecutorConfig, ResponseCode, ScheduleStatus
 
 from twitter.common import app, log
 from twitter.common.python.pex import PexInfo
