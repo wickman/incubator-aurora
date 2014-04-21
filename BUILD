@@ -13,4 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-maven_layout()
+
+source_root('src/main/python', Page, PythonBinary, PythonLibrary)
+source_root('src/main/thrift', Page, PythonLibrary, PythonThriftLibrary)
+
+# TODO get rid of PythonLibrary from src/test/python
+source_root('src/test/python', Page, PythonTests, PythonTestSuite, PythonLibrary)
