@@ -62,7 +62,6 @@ from gen.apache.aurora.api.ttypes import ExecutorConfig, ResponseCode, ScheduleS
 
 from twitter.common import app, log
 from twitter.common.python.pex import PexInfo
-from twitter.common.python.dirwrapper import PythonDirectoryWrapper
 
 
 def get_job_config(job_spec, config_file, options):
@@ -102,12 +101,11 @@ def version(args):
   Prints information about the version of the aurora client being run.
   """
   try:
-    pexpath = sys.argv[0]
-    pex_info = PexInfo.from_pex(PythonDirectoryWrapper.get(pexpath))
+    pex_info = PexInfo.from_pex(sys.argv[0])
     print("Aurora client build info:")
     print("\tsha: %s" % pex_info.build_properties['sha'])
     print("\tdate: %s" % pex_info.build_properties['date'])
-  except (IOError, PythonDirectoryWrapper.Error):
+  except (IOError, OSError):
     print("Aurora client build info not available")
   print("Aurora API version: %s" % CURRENT_API_VERSION)
 
