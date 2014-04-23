@@ -175,7 +175,6 @@ struct TaskConfig {
                                              // Wildcards are supported for dynamic link
                                              // crafting based on host, ports, instance, etc.
  23: optional string contactEmail
- 24: optional set<Package> packagesDEPRECATED // TODO(maxim): Drop when fully migrated to metadata.
  25: optional ExecutorConfig executorConfig  // Executor configuration
  27: optional set<Metadata> metadata         // Used to display additional details in the UI.
 }
@@ -246,6 +245,7 @@ struct AcquireLockResult {
 
 // States that a task may be in.
 enum ScheduleStatus {
+  // TODO(maxim): This state does not add much value. Consider dropping it completely.
   // Initial state for a task.  A task will remain in this state until it has been persisted.
   INIT             = 11,
   // The task will be rescheduled, but is being throttled for restarting too frequently.
@@ -275,9 +275,8 @@ enum ScheduleStatus {
   // A fault in the task environment has caused the system to believe the task no longer exists.
   // This can happen, for example, when a slave process disappears.
   LOST             = 7,
-  // The task is unknown to one end of the system.  This is used to reconcile state when the
-  // scheduler believes a task to exist in a location that stops reporting it, or vice versa.
-  UNKNOWN          = 10
+  // The task sandbox has been deleted by the executor.
+  SANDBOX_DELETED  = 10
 }
 
 // States that a task may be in while still considered active.
@@ -311,7 +310,8 @@ const set<ScheduleStatus> LIVE_STATES = [ScheduleStatus.KILLING,
 const set<ScheduleStatus> TERMINAL_STATES = [ScheduleStatus.FAILED,
                                              ScheduleStatus.FINISHED,
                                              ScheduleStatus.KILLED,
-                                             ScheduleStatus.LOST]
+                                             ScheduleStatus.LOST,
+                                             ScheduleStatus.SANDBOX_DELETED]
 
 // Environment assigned to a job when unspecified
 const string DEFAULT_ENVIRONMENT = "devel"
@@ -436,6 +436,7 @@ struct JobSummaryResult {
 struct ServerInfo {
   1: string clusterName
   2: i32 thriftAPIVersion
+  3: string statsUrlPrefix  // A url prefix for job container stats.
 }
 
 union Result {

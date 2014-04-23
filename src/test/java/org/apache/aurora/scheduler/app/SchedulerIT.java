@@ -116,6 +116,7 @@ public class SchedulerIT extends BaseZooKeeperTest {
 
   private static final String CLUSTER_NAME = "integration_test_cluster";
   private static final String SERVERSET_PATH = "/fake/service/path";
+  private static final String STATS_URL_PREFIX = "fake_url";
   private static final String FRAMEWORK_ID = "integration_test_framework_id";
 
   private ExecutorService executor = Executors.newCachedThreadPool(
@@ -200,7 +201,8 @@ public class SchedulerIT extends BaseZooKeeperTest {
         .withCredentials(ZooKeeperClient.digestCredentials("mesos", "mesos"));
     injector = Guice.createInjector(
         ImmutableList.<Module>builder()
-            .addAll(SchedulerMain.getModules(CLUSTER_NAME, SERVERSET_PATH, zkClientConfig))
+            .addAll(SchedulerMain.getModules(
+                CLUSTER_NAME, SERVERSET_PATH, zkClientConfig, STATS_URL_PREFIX))
             .add(new LifecycleModule())
             .add(new AppLauncherModule())
             .add(new ZooKeeperClientModule(zkClientConfig))
@@ -372,7 +374,7 @@ public class SchedulerIT extends BaseZooKeeperTest {
     assertEquals(0L, Stats.<Long>getVariable("task_store_PENDING").read().longValue());
     assertEquals(1L, Stats.<Long>getVariable("task_store_ASSIGNED").read().longValue());
     assertEquals(1L, Stats.<Long>getVariable("task_store_RUNNING").read().longValue());
-    assertEquals(0L, Stats.<Long>getVariable("task_store_UNKNOWN").read().longValue());
+    assertEquals(0L, Stats.<Long>getVariable("task_store_SANDBOX_DELETED").read().longValue());
 
     // TODO(William Farner): Send a thrift RPC to the scheduler.
     // TODO(William Farner): Also send an admin thrift RPC to verify capability (e.g. ROOT) mapping.
