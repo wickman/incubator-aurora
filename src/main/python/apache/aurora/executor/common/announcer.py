@@ -62,18 +62,25 @@ class AnnouncerProvider(StatusCheckerProvider):
 
 
 class ServerSetJoinThread(ExceptionalThread):
-  def __init__(self, event, joiner):
+  """Background thread to reconnect to Serverset on session expiration."""
+
+  LOOP_WAIT = Amount(1, Time.SECONDS)
+
+  def __init__(self, event, joiner, loop_wait=LOOP_WAIT):
     self._event = event
     self._joiner = joiner
     self._stopped = threading.Event()
+    self._loop_wait = loop_wait
     super(ServerSetJoinThread, self).__init__()
     self.daemon = True
 
   def run(self):
-    while not self._stopped.wait(timeout=1.0):
+    while True:
       if self._stopped.is_set():
         break
-      self._event.wait()
+      self._event.wait(timeout=self._loop_wait.as_(Time.SECONDS))
+      if not self._event.is_set():
+        continue
       log.debug('Join event triggered, joining serverset.')
       self._event.clear()
       self._joiner()
