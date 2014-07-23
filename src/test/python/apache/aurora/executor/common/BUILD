@@ -27,6 +27,9 @@ python_tests(
   name = 'announcer',
   sources = ['test_announcer.py'],
   dependencies = [
+    pants('3rdparty/python:mock'),
+    pants('3rdparty/python:twitter.common.quantity'),
+    pants('3rdparty/python:twitter.common.testing'),
     pants('src/main/python/apache/aurora/executor/common:announcer'),
   ],
 )

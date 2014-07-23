@@ -18,7 +18,7 @@ from apache.aurora.executor.common.task_info import (
 )
 
 
-class AnnouncerProvider(StatusCheckerProvider):
+class DefaultAnnouncerProvider(StatusCheckerProvider):
   @classmethod
   def join_keywords(cls, hostname, portmap, primary_port):
     """
@@ -57,8 +57,13 @@ class AnnouncerProvider(StatusCheckerProvider):
         mesos_task.environment().get(),
         assigned_task.task.jobName)
 
-    return Announcer(
-        self.__ensemble, path, endpoint, additional=additional, shard=assigned_task.instanceId)
+    zookeeper = KazooClient(self.__ensemble)
+    zookeeper.start()
+
+    serverset = ServerSet(zookeeper, path)
+
+    return AnnouncerChecker(
+        serverset, endpoint, additional=additional, shard=assigned_task.instanceId)
 
 
 class ServerSetJoinThread(ExceptionalThread):
@@ -99,7 +104,8 @@ class Announcer(Observable):
                endpoint,
                additional=None,
                shard=None,
-               clock=time):
+               clock=time,
+               exception_wait=EXCEPTION_WAIT):
     self._membership = None
     self._membership_termination = clock.time()
     self._endpoint = endpoint
@@ -109,6 +115,7 @@ class Announcer(Observable):
     self._rejoin_event = threading.Event()
     self._clock = clock
     self._thread = None
+    self._exception_wait = exception_wait
 
   def disconnected_time(self):
     # Lockless membership length check
@@ -133,7 +140,7 @@ class Announcer(Observable):
         self._membership_termination = None
       except Exception as e:
         log.error('Failed to join ServerSet: %s' % e)
-        self._clock.sleep(self.EXCEPTION_WAIT.as_(Time.SECONDS))
+        self._clock.sleep(self._exception_wait.as_(Time.SECONDS))
       else:
         break
 
@@ -161,10 +168,8 @@ class Announcer(Observable):
 
 
 class AnnouncerChecker(StatusChecker):
-  def __init__(self, ensemble, path, endpoint, additional=None, shard=None):
-    self._zookeeper = KazooClient(ensemble)
-    self._zookeeper.start()
-    self._serverset = ServerSet(self._zookeeper, path)
+  def __init__(self, serverset, endpoint, additional=None, shard=None):
+    self._serverset = serverset
     self._announcer = Announcer(self._serverset, endpoint, additional=additional, shard=shard)
     self.metrics.register(LambdaGauge('disconnected_time', self._announcer.disconnected_time))
     self.metrics.register_observable('ensemble', self._serverset)
@@ -176,7 +181,9 @@ class AnnouncerChecker(StatusChecker):
   def name(self):
     return 'announcer'
 
+  def start(self):
+    self._announcer.start()
+
   def stop(self):
     self.metrics.unregister_observable('ensemble')
-    if self._announcer:
-      defer(self._announcer.stop)
+    defer(self._announcer.stop)
