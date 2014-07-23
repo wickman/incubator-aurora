@@ -3,12 +3,12 @@ import socket
 import threading
 import time
 
-from kazoo.client import KazooClient
 from twitter.common import log
 from twitter.common.concurrent.deferred import defer
 from twitter.common.exceptions import ExceptionalThread
 from twitter.common.metrics import LambdaGauge, Observable
 from twitter.common.quantity import Amount, Time
+from twitter.common.zookeeper.kazoo_client import TwitterKazooClient
 from twitter.common.zookeeper.serverset import Endpoint, ServerSet
 
 from apache.aurora.executor.common.status_checker import StatusChecker, StatusCheckerProvider
@@ -18,25 +18,28 @@ from apache.aurora.executor.common.task_info import (
 )
 
 
+def make_endpoints(hostname, portmap, primary_port):
+  """
+    Generate primary, additional endpoints from a portmap and primary_port.
+    primary_port must be a name in the portmap dictionary.
+  """
+  # Do int check as stop-gap measure against incompatible downstream clients.
+  additional_endpoints = dict(
+      (name, Endpoint(hostname, port)) for (name, port) in portmap.items()
+      if isinstance(port, int))
+
+  # It's possible for the primary port to not have been allocated if this task
+  # is using autoregistration, so register with a port of 0.
+  return Endpoint(hostname, portmap.get(primary_port, 0)), additional_endpoints
+
+
 class DefaultAnnouncerProvider(StatusCheckerProvider):
-  @classmethod
-  def join_keywords(cls, hostname, portmap, primary_port):
-    """
-      Generate primary, additional endpoints from a portmap and primary_port.
-      primary_port must be a name in the portmap dictionary.
-    """
-    # Do int check as stop-gap measure against incompatible downstream clients.
-    additional_endpoints = dict(
-        (name, Endpoint(hostname, port)) for (name, port) in portmap.items()
-        if isinstance(port, int))
-
-    # It's possible for the primary port to not have been allocated if this task
-    # is using autoregistration, so register with a port of 0.
-    return Endpoint(hostname, portmap.get(primary_port, 0)), additional_endpoints
-
   def __init__(self, ensemble, root='/aurora'):
     self.__ensemble = ensemble
     self.__root = root
+
+  def make_client(self):
+    return TwitterKazooClient.make(self.__ensemble)
 
   def from_assigned_task(self, assigned_task, _):
     mesos_task = mesos_task_instance_from_assigned_task(assigned_task)
@@ -46,7 +49,7 @@ class DefaultAnnouncerProvider(StatusCheckerProvider):
 
     portmap = resolve_ports(mesos_task, assigned_task.assignedPorts)
 
-    endpoint, additional = self.join_keywords(
+    endpoint, additional = make_endpoints(
         socket.gethostname(),
         portmap,
         mesos_task.announce().primary_port().get())
@@ -57,13 +60,16 @@ class DefaultAnnouncerProvider(StatusCheckerProvider):
         mesos_task.environment().get(),
         assigned_task.task.jobName)
 
-    zookeeper = KazooClient(self.__ensemble)
-    zookeeper.start()
-
+    zookeeper = self.make_client()
     serverset = ServerSet(zookeeper, path)
 
-    return AnnouncerChecker(
+    checker = AnnouncerChecker(
         serverset, endpoint, additional=additional, shard=assigned_task.instanceId)
+
+    if isinstance(zookeeper, Observable):
+      checker.metrics.register_observable('ensemble', zookeeper)
+
+    return checker
 
 
 class ServerSetJoinThread(ExceptionalThread):
@@ -169,10 +175,8 @@ class Announcer(Observable):
 
 class AnnouncerChecker(StatusChecker):
   def __init__(self, serverset, endpoint, additional=None, shard=None):
-    self._serverset = serverset
-    self._announcer = Announcer(self._serverset, endpoint, additional=additional, shard=shard)
+    self._announcer = Announcer(serverset, endpoint, additional=additional, shard=shard)
     self.metrics.register(LambdaGauge('disconnected_time', self._announcer.disconnected_time))
-    self.metrics.register_observable('ensemble', self._serverset)
 
   @property
   def status(self):
@@ -185,5 +189,4 @@ class AnnouncerChecker(StatusChecker):
     self._announcer.start()
 
   def stop(self):
-    self.metrics.unregister_observable('ensemble')
     defer(self._announcer.stop)

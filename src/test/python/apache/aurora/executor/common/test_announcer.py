@@ -1,12 +1,18 @@
 import threading
 
 import mock
+from kazoo.client import KazooClient
 from kazoo.exceptions import KazooException
 from twitter.common.quantity import Amount, Time
 from twitter.common.testing.clock import ThreadedClock
 from twitter.common.zookeeper.serverset import Endpoint, ServerSet
 
-from apache.aurora.executor.common.announcer import Announcer, ServerSetJoinThread
+from apache.aurora.executor.common.announcer import (
+    Announcer,
+    DefaultAnnouncerProvider,
+    make_endpoints,
+    ServerSetJoinThread
+)
 
 
 def test_serverset_join_thread():
@@ -66,16 +72,18 @@ def test_announcer_under_normal_circumstances():
 
   announcer.start()
 
-  joined.wait(timeout=1.0)
-  assert joined.is_set()
+  try:
+    joined.wait(timeout=1.0)
+    assert joined.is_set()
 
-  assert announcer.disconnected_time() == 0.0
-  clock.tick(1.0)
-  assert announcer.disconnected_time() == 0.0, (
-      'Announcer should not advance disconnection time when connected.')
-  assert announcer._membership == 'membership foo'
+    assert announcer.disconnected_time() == 0.0
+    clock.tick(1.0)
+    assert announcer.disconnected_time() == 0.0, (
+        'Announcer should not advance disconnection time when connected.')
+    assert announcer._membership == 'membership foo'
 
-  announcer.stop()
+  finally:
+    announcer.stop()
 
   mock_serverset.cancel.assert_called_with('membership foo')
 
@@ -83,6 +91,52 @@ def test_announcer_under_normal_circumstances():
   clock.tick(1.0)
   assert announcer.disconnected_time() == 0.0, (
       'Announcer should not advance disconnection time when stopped.')
+
+
+def test_announcer_on_expiration():
+  joined = threading.Event()
+  operations = []
+
+  def joined_side_effect(*args, **kw):
+    # 'global' does not work within python nested functions, so we cannot use a
+    # counter here, so instead we do append/len (see PEP-3104)
+    operations.append(1)
+    if len(operations) == 1 or len(operations) == 3:
+      joined.set()
+      return 'membership %d' % len(operations)
+    else:
+      raise KazooException('Failed to reconnect')
+
+  mock_serverset = mock.MagicMock(spec=ServerSet)
+  mock_serverset.join = mock.MagicMock()
+  mock_serverset.join.side_effect = joined_side_effect
+  mock_serverset.cancel = mock.MagicMock()
+
+  endpoint = Endpoint('localhost', 12345)
+  clock = ThreadedClock(31337.0)
+
+  announcer = Announcer(
+      mock_serverset, endpoint, clock=clock, exception_wait=Amount(2, Time.SECONDS))
+  announcer.start()
+
+  try:
+    joined.wait(timeout=1.0)
+    assert joined.is_set()
+    assert announcer._membership == 'membership 1'
+    assert announcer.disconnected_time() == 0.0
+    clock.tick(1.0)
+    assert announcer.disconnected_time() == 0.0
+    announcer.on_expiration()  # expect exception
+    clock.tick(1.0)
+    assert announcer.disconnected_time() == 1.0, (
+        'Announcer should be disconnected on expiration.')
+    clock.tick(1.0)
+    assert announcer.disconnected_time() == 0.0, (
+        'Announcer should not advance disconnection time when connected.')
+    assert announcer._membership == 'membership 3'
+
+  finally:
+    announcer.stop()
 
 
 def test_announcer_under_abnormal_circumstances():
@@ -110,3 +164,79 @@ def test_announcer_under_abnormal_circumstances():
     assert announcer._membership == 'member0001'
   finally:
     announcer.stop()
+
+
+def make_assigned_task(thermos_config, assigned_ports=None):
+  from gen.apache.aurora.api.constants import AURORA_EXECUTOR_NAME
+  from gen.apache.aurora.api.ttypes import AssignedTask, ExecutorConfig, TaskConfig
+
+  assigned_ports = assigned_ports or {}
+  executor_config = ExecutorConfig(name=AURORA_EXECUTOR_NAME, data=thermos_config.json_dumps())
+
+  return AssignedTask(
+      instanceId=12345,
+      task=TaskConfig(jobName=thermos_config.name().get(), executorConfig=executor_config),
+      assignedPorts=assigned_ports)
+
+
+def make_job(role, environment, name, primary_port, portmap):
+  from apache.aurora.config.schema.base import (
+      Announcer,
+      Job,
+      Process,
+      Resources,
+      Task,
+  )
+  task = Task(
+      name='ignore2',
+      processes=[Process(name='ignore3', cmdline='ignore4')],
+      resources=Resources(cpu=1, ram=1, disk=1))
+  job = Job(
+      role=role,
+      environment=environment,
+      name=name,
+      cluster='ignore1',
+      task=task,
+      announce=Announcer(primary_port=primary_port, portmap=portmap))
+  return job
+
+
+def test_make_empty_endpoints():
+  hostname = 'aurora.example.com'
+  portmap = {}
+  primary_port = 'http'
+
+  # test no bound 'http' port
+  primary, additional = make_endpoints(hostname, portmap, primary_port)
+  assert primary == Endpoint(hostname, 0)
+  assert additional == {}
+
+
+@mock.patch('apache.aurora.executor.common.announcer.ServerSet')
+def test_default_announcer_provider(mock_serverset_provider):
+  mock_client = mock.MagicMock(spec=KazooClient)
+
+  class TestDefaultAnnouncerProvider(DefaultAnnouncerProvider):
+    def make_client(self):
+      return mock_client
+
+  mock_serverset = mock.MagicMock(spec=ServerSet)
+  mock_serverset_provider.return_value = mock_serverset
+
+  dap = TestDefaultAnnouncerProvider('zookeeper.example.com', root='/aurora')
+  job = make_job('aurora', 'prod', 'proxy', 'primary', portmap={'http': 80, 'admin': 'primary'})
+  assigned_task = make_assigned_task(job, assigned_ports={'primary': 12345})
+  checker = dap.from_assigned_task(assigned_task, None)
+  mock_serverset_provider.assert_called_once_with(mock_client, '/aurora/aurora/prod/proxy')
+  assert checker.name() == 'announcer'
+  assert checker.status is None
+
+
+def test_default_announcer_provider_without_announce():
+  from pystachio import Empty
+
+  job = make_job('aurora', 'prod', 'proxy', 'primary', portmap={})
+  job = job(announce=Empty)
+  assigned_task = make_assigned_task(job)
+
+  assert DefaultAnnouncerProvider('foo.bar').from_assigned_task(assigned_task, None) is None
