@@ -78,8 +78,7 @@ EOF
 
   cat <<EOF > $DIST_DIR/thermos_executor.sh
 #!/usr/bin/env bash
-HERE=$(cd `dirname "${BASH_SOURCE[0]}"` && pwd)
-exec $HERE/thermos_executor.pex --announcer-enable --announcer-ensemble localhost:2181
+exec /home/vagrant/aurora/dist/thermos_executor.pex --announcer-enable --announcer-ensemble localhost:2181
 EOF
   chmod +x $DIST_DIR/thermos_executor.sh
 }
