@@ -44,10 +44,10 @@ collect_result() {
 
 validate_serverset() {
   # default python return code
-  retcode=0
+  local retcode=0
 
   # launch aurora client in interpreter mode to get access to the kazoo client
-  cat <<EOF | vagrant ssh -c "env SERVERSET="$1" PEX_INTERPRETER=1 aurora" >& /dev/null || retcode=$?
+  vagrant ssh -c "env SERVERSET="$1" PEX_INTERPRETER=1 aurora" <<EOF >& /dev/null || retcode=$?
 import os, posixpath, sys, time
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError
