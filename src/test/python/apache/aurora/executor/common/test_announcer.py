@@ -9,7 +9,7 @@ from twitter.common.zookeeper.serverset import Endpoint, ServerSet
 
 from apache.aurora.executor.common.announcer import (
     Announcer,
-    DefaultAnnouncerProvider,
+    DefaultAnnouncerCheckerProvider,
     make_endpoints,
     ServerSetJoinThread
 )
@@ -168,15 +168,17 @@ def test_announcer_under_abnormal_circumstances():
 
 def make_assigned_task(thermos_config, assigned_ports=None):
   from gen.apache.aurora.api.constants import AURORA_EXECUTOR_NAME
-  from gen.apache.aurora.api.ttypes import AssignedTask, ExecutorConfig, TaskConfig
+  from gen.apache.aurora.api.ttypes import AssignedTask, ExecutorConfig, Identity, TaskConfig
 
   assigned_ports = assigned_ports or {}
   executor_config = ExecutorConfig(name=AURORA_EXECUTOR_NAME, data=thermos_config.json_dumps())
+  task_config = TaskConfig(
+      owner=Identity(role=thermos_config.role().get(), user=thermos_config.role().get()),
+      environment=thermos_config.environment().get(),
+      jobName=thermos_config.name().get(),
+      executorConfig=executor_config)
 
-  return AssignedTask(
-      instanceId=12345,
-      task=TaskConfig(jobName=thermos_config.name().get(), executorConfig=executor_config),
-      assignedPorts=assigned_ports)
+  return AssignedTask(instanceId=12345, task=task_config, assignedPorts=assigned_ports)
 
 
 def make_job(role, environment, name, primary_port, portmap):
@@ -213,20 +215,19 @@ def test_make_empty_endpoints():
 
 
 @mock.patch('apache.aurora.executor.common.announcer.ServerSet')
-def test_default_announcer_provider(mock_serverset_provider):
+@mock.patch('apache.aurora.executor.common.announcer.KazooClient')
+def test_default_announcer_provider(mock_client_provider, mock_serverset_provider):
   mock_client = mock.MagicMock(spec=KazooClient)
-
-  class TestDefaultAnnouncerProvider(DefaultAnnouncerProvider):
-    def make_client(self):
-      return mock_client
-
+  mock_client_provider.return_value = mock_client
   mock_serverset = mock.MagicMock(spec=ServerSet)
   mock_serverset_provider.return_value = mock_serverset
 
-  dap = TestDefaultAnnouncerProvider('zookeeper.example.com', root='/aurora')
+  dap = DefaultAnnouncerCheckerProvider('zookeeper.example.com', root='/aurora')
   job = make_job('aurora', 'prod', 'proxy', 'primary', portmap={'http': 80, 'admin': 'primary'})
   assigned_task = make_assigned_task(job, assigned_ports={'primary': 12345})
   checker = dap.from_assigned_task(assigned_task, None)
+
+  mock_client.start.assert_called_once_with()
   mock_serverset_provider.assert_called_once_with(mock_client, '/aurora/aurora/prod/proxy')
   assert checker.name() == 'announcer'
   assert checker.status is None
@@ -239,4 +240,4 @@ def test_default_announcer_provider_without_announce():
   job = job(announce=Empty)
   assigned_task = make_assigned_task(job)
 
-  assert DefaultAnnouncerProvider('foo.bar').from_assigned_task(assigned_task, None) is None
+  assert DefaultAnnouncerCheckerProvider('foo.bar').from_assigned_task(assigned_task, None) is None

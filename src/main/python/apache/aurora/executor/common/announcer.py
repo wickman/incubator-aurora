@@ -2,13 +2,15 @@ import posixpath
 import socket
 import threading
 import time
+from abc import abstractmethod
 
+from kazoo.client import KazooClient
+from kazoo.retry import KazooRetry
 from twitter.common import log
 from twitter.common.concurrent.deferred import defer
 from twitter.common.exceptions import ExceptionalThread
 from twitter.common.metrics import LambdaGauge, Observable
 from twitter.common.quantity import Amount, Time
-from twitter.common.zookeeper.kazoo_client import TwitterKazooClient
 from twitter.common.zookeeper.serverset import Endpoint, ServerSet
 
 from apache.aurora.executor.common.status_checker import StatusChecker, StatusCheckerProvider
@@ -33,13 +35,14 @@ def make_endpoints(hostname, portmap, primary_port):
   return Endpoint(hostname, portmap.get(primary_port, 0)), additional_endpoints
 
 
-class DefaultAnnouncerProvider(StatusCheckerProvider):
-  def __init__(self, ensemble, root='/aurora'):
-    self.__ensemble = ensemble
-    self.__root = root
+class AnnouncerCheckerProvider(StatusCheckerProvider):
+  def __init__(self, name=None):
+    self.name = name
+    super(AnnouncerCheckerProvider, self).__init__()
 
-  def make_client(self):
-    return TwitterKazooClient.make(self.__ensemble)
+  @abstractmethod
+  def make_serverset(self, assigned_task):
+    """Given an assigned task, return the serverset into which we should announce the task."""
 
   def from_assigned_task(self, assigned_task, _):
     mesos_task = mesos_task_instance_from_assigned_task(assigned_task)
@@ -54,22 +57,34 @@ class DefaultAnnouncerProvider(StatusCheckerProvider):
         portmap,
         mesos_task.announce().primary_port().get())
 
-    path = posixpath.join(
-        self.__root,
-        mesos_task.role().get(),
-        mesos_task.environment().get(),
+    serverset = self.make_serverset(assigned_task)
+
+    return AnnouncerChecker(
+        serverset, endpoint, additional=additional, shard=assigned_task.instanceId, name=self.name)
+
+
+class DefaultAnnouncerCheckerProvider(AnnouncerCheckerProvider):
+  DEFAULT_RETRY_MAX_DELAY = Amount(5, Time.MINUTES)
+  DEFAULT_RETRY_POLICY = KazooRetry(
+      max_tries=None,
+      ignore_expire=True,
+      max_delay=DEFAULT_RETRY_MAX_DELAY.as_(Time.SECONDS),
+  )
+
+  def __init__(self, ensemble, root='/aurora'):
+    self.__ensemble = ensemble
+    self.__root = root
+    super(DefaultAnnouncerCheckerProvider, self).__init__()
+
+  def make_serverset(self, assigned_task):
+    role, environment, name = (
+        assigned_task.task.owner.role,
+        assigned_task.task.environment,
         assigned_task.task.jobName)
-
-    zookeeper = self.make_client()
-    serverset = ServerSet(zookeeper, path)
-
-    checker = AnnouncerChecker(
-        serverset, endpoint, additional=additional, shard=assigned_task.instanceId)
-
-    if isinstance(zookeeper, Observable):
-      checker.metrics.register_observable('ensemble', zookeeper)
-
-    return checker
+    path = posixpath.join(self.__root, role, environment, name)
+    client = KazooClient(self.__ensemble, connection_retry=self.DEFAULT_RETRY_POLICY)
+    client.start()
+    return ServerSet(client, path)
 
 
 class ServerSetJoinThread(ExceptionalThread):
@@ -111,7 +126,7 @@ class Announcer(Observable):
                additional=None,
                shard=None,
                clock=time,
-               exception_wait=EXCEPTION_WAIT):
+               exception_wait=None):
     self._membership = None
     self._membership_termination = clock.time()
     self._endpoint = endpoint
@@ -121,7 +136,7 @@ class Announcer(Observable):
     self._rejoin_event = threading.Event()
     self._clock = clock
     self._thread = None
-    self._exception_wait = exception_wait
+    self._exception_wait = exception_wait or self.EXCEPTION_WAIT
 
   def disconnected_time(self):
     # Lockless membership length check
@@ -169,24 +184,27 @@ class Announcer(Observable):
     if not self._thread:
       return
     self._membership_termination = self._clock.time()
-    log.info('TwitterService session expired.')
+    log.info('Zookeeper session expired.')
     self.rejoin()
 
 
 class AnnouncerChecker(StatusChecker):
-  def __init__(self, serverset, endpoint, additional=None, shard=None):
-    self._announcer = Announcer(serverset, endpoint, additional=additional, shard=shard)
-    self.metrics.register(LambdaGauge('disconnected_time', self._announcer.disconnected_time))
+  DEFAULT_NAME = 'announcer'
+
+  def __init__(self, serverset, endpoint, additional=None, shard=None, name=None):
+    self.__announcer = Announcer(serverset, endpoint, additional=additional, shard=shard)
+    self.__name = name or self.DEFAULT_NAME
+    self.metrics.register(LambdaGauge('disconnected_time', self.__announcer.disconnected_time))
 
   @property
   def status(self):
     return None  # always return healthy
 
   def name(self):
-    return 'announcer'
+    return self.__name
 
   def start(self):
-    self._announcer.start()
+    self.__announcer.start()
 
   def stop(self):
-    defer(self._announcer.stop)
+    defer(self.__announcer.stop)
