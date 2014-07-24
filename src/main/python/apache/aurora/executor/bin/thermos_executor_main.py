@@ -26,7 +26,7 @@ from twitter.common import app, log
 from twitter.common.log.options import LogOptions
 
 from apache.aurora.executor.aurora_executor import AuroraExecutor
-from apache.aurora.executor.common.announcer import DefaultAnnouncerProvider
+from apache.aurora.executor.common.announcer import DefaultAnnouncerCheckerProvider
 from apache.aurora.executor.common.executor_timeout import ExecutorTimeout
 from apache.aurora.executor.common.health_checker import HealthCheckerProvider
 from apache.aurora.executor.thermos_task_runner import DefaultThermosTaskRunnerProvider
@@ -45,12 +45,14 @@ app.add_option(
     help='Enable the ServerSet announcer for this executor.  Jobs must still activate using '
          'the Announcer configuration.')
 
+
 app.add_option(
     '--announcer-ensemble',
     dest='announcer_ensemble',
     type=str,
     default=None,
     help='The ensemble to which the Announcer should register ServerSets.')
+
 
 app.add_option(
     '--announcer-serverset-path',
@@ -89,8 +91,8 @@ def proxy_main():
     if options.announcer_enable:
       if options.announcer_ensemble is None:
         app.error('Must specify --announcer-ensemble if the announcer is enabled.')
-      status_providers.append(
-          DefaultAnnouncerProvider(options.announcer_ensemble, options.announcer_serverset_path))
+      status_providers.append(DefaultAnnouncerCheckerProvider(
+          options.announcer_ensemble, options.announcer_serverset_path))
 
     # Create executor stub
     thermos_executor = AuroraExecutor(
