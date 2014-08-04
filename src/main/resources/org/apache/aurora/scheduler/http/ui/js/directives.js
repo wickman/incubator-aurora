@@ -63,10 +63,10 @@
     return {
       restrict: 'E',
       replace: true,
-      link: function (scope, element, attrs, ctrl) {
-        element.on('click', function (e) {
+      link: function (scope) {
+        scope.toggleShowDetails = function () {
           scope.showDetails = !scope.showDetails;
-        });
+        };
       }
     };
   });
@@ -74,8 +74,8 @@
   auroraUI.directive('taskLink', function () {
     return {
       restrict: 'C',
-      template: '<a class="col-md-8" ng-href="/structdump/task/{{formatedValue}}" target="_self">' +
-        '{{formatedValue}}</a>'
+      template: '<a class="col-md-8" ng-href="/structdump/task/{{formatedValue}}" ' +
+        'target="_self">{{formatedValue}}</a>'
     };
   });
 

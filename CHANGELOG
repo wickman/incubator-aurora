@@ -120,6 +120,11 @@ Aurora 0.5.0
     * [AURORA-355] - Website docs are outdated
     * [AURORA-564] - killTasks will not kill cron jobs that do not currently have active tasks
     * [AURORA-583] - test failures due to apparent pants issue
+    * [AURORA-582] - Slave attributes cached incorrectly by scheduler
+    * [AURORA-377] - No Veto reason is exposed for a task stuck in PENDING due to host constraints
+    * [AURORA-584] - Storage is not READY uncaught exception during getJobSummary
+    * [AURORA-596] - SQL constraint violation in DbAttributeStore
+    * [AURORA-443] - Aurora admin perform_maintenance_hosts must bail out if no hosts found
 
 ## Epic
     * [AURORA-205] - Have a way to query for job uptime metrics providing a basis for future SLA monitoring
@@ -194,6 +199,12 @@ Aurora 0.5.0
     * [AURORA-562] - Expose a stat for count of LOST status updates for GC executor tasks
     * [AURORA-565] - update top level readme with instructions on bootstrapping and running initial test
     * [AURORA-211] - Scheduler UI should redirect to the current leader
+    * [AURORA-350] - Parallelize updates to speed up deploys
+    * [AURORA-593] - Enable jenkins jacoco plugin
+    * [AURORA-574] - Add documentation for HTTP health checking and graceful task exit
+    * [AURORA-594] - RC1 files missing Apache license headers
+    * [AURORA-590] - Release scripts branch and CHANGELOG urls are wrong in generated email template
+    * [AURORA-599] - Reset changelog and version for 0.5.0 rc2
 
 ## Sub-task
     * [AURORA-521] - Add pagination to getTasksStatus
@@ -330,6 +341,11 @@ Aurora 0.5.0
     * [AURORA-465] - Update scheduler deployment documentation to remove mention of dedicated thrift port
     * [AURORA-431] - Support configurable defaults using init files.
     * [AURORA-435] - Chunk the responses of getTasksStatus
+    * [AURORA-555] - H2-backed implementation of SchedulerStore
+    * [AURORA-576] - Define a thrift API for client operations.
+    * [AURORA-553] - Switch to getTasksWithoutConfig RPC on the client where applicable
+    * [AURORA-567] - Have client commands that load config files log the contents of the loaded config.
+    * [AURORA-557] - H2-backed implementation of AttributeStore
 
 
 

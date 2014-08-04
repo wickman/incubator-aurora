@@ -13,12 +13,8 @@
  */
 package org.apache.aurora.scheduler.state;
 
-import java.util.Set;
-
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableSet;
 
-import org.apache.aurora.gen.ScheduleStatus;
 import org.apache.aurora.scheduler.base.ScheduleException;
 import org.apache.aurora.scheduler.configuration.ConfigurationManager.TaskDescriptionException;
 import org.apache.aurora.scheduler.configuration.SanitizedConfiguration;
@@ -57,25 +53,5 @@ public interface SchedulerCore {
    * @throws ScheduleException If any of the existing instance IDs already exist.
    */
   void addInstances(IJobKey jobKey, ImmutableSet<Integer> instanceIds, ITaskConfig config)
-      throws ScheduleException;
-
-  /**
-   * Assigns a new state to tasks.
-   *
-   * @param taskId ID of the task to transition.
-   * @param status The new state of the tasks.
-   * @param message Additional information about the state transition.
-   */
-  void setTaskStatus(String taskId, ScheduleStatus status, Optional<String> message);
-
-  /**
-   * Initiates a restart of shards within an active job.
-   *
-   * @param jobKey Key of job to be restarted.
-   * @param shards Shards to be restarted.
-   * @param requestingUser User performing the restart action.
-   * @throws ScheduleException If there are no matching active shards.
-   */
-  void restartShards(IJobKey jobKey, Set<Integer> shards, String requestingUser)
       throws ScheduleException;
 }

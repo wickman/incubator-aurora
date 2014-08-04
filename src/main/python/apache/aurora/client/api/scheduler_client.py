@@ -29,7 +29,7 @@ from apache.aurora.common.auth import make_session_key, SessionKeyError
 from apache.aurora.common.cluster import Cluster
 from apache.aurora.common.transport import TRequestsTransport
 
-from gen.apache.aurora.api import AuroraAdmin
+from gen.apache.aurora.api import AuroraAdmin, ReadOnlyScheduler
 from gen.apache.aurora.api.constants import CURRENT_API_VERSION
 
 try:
@@ -181,14 +181,6 @@ class SchedulerProxy(object):
   CONNECT_MAXIMUM_WAIT = Amount(1, Time.MINUTES)
   RPC_RETRY_INTERVAL = Amount(5, Time.SECONDS)
   RPC_MAXIMUM_WAIT = Amount(10, Time.MINUTES)
-  UNAUTHENTICATED_RPCS = frozenset([
-    'populateJobConfig',
-    'getTasksStatus',
-    'getTasksWithoutConfigs',
-    'getJobs',
-    'getQuota',
-    'getVersion',
-  ])
 
   class Error(Exception): pass
   class TimeoutError(Error): pass
@@ -204,6 +196,8 @@ class SchedulerProxy(object):
     self._session_key_factory = session_key_factory
     self._client = self._scheduler_client = None
     self.verbose = verbose
+    self._lock = threading.RLock()
+    self._terminating = threading.Event()
 
   def with_scheduler(method):
     """Decorator magic to make sure a connection is made to the scheduler"""
@@ -215,6 +209,11 @@ class SchedulerProxy(object):
 
   def invalidate(self):
     self._client = self._scheduler_client = None
+
+  def terminate(self):
+    """Requests immediate termination of any retry attempts and invalidates client."""
+    self._terminating.set()
+    self.invalidate()
 
   @with_scheduler
   def client(self):
@@ -268,24 +267,33 @@ class SchedulerProxy(object):
 
     @functools.wraps(method)
     def method_wrapper(*args):
-      start = time.time()
-      while (time.time() - start) < self.RPC_MAXIMUM_WAIT.as_(Time.SECONDS):
-        auth_args = () if method_name in self.UNAUTHENTICATED_RPCS else (self.session_key(),)
-        try:
-          method = getattr(self.client(), method_name)
-          if not callable(method):
-            return method
-          return method(*(args + auth_args))
-        except (TTransport.TTransportException, self.TimeoutError) as e:
-          log.warning('Connection error with scheduler: %s, reconnecting...' % e)
-          self.invalidate()
-          time.sleep(self.RPC_RETRY_INTERVAL.as_(Time.SECONDS))
-        except Exception as e:
-          # Take any error that occurs during the RPC call, and transform it
-          # into something clients can handle.
-          raise self.ThriftInternalError("Error during thrift call %s to %s: %s" %
-              (method_name, self.cluster.name, e))
-      raise self.TimeoutError('Timed out attempting to issue %s to %s' % (
-          method_name, self.cluster.name))
+      with self._lock:
+        start = time.time()
+        # TODO(wfarner): The while loop causes failed unit tests to spin for the retry
+        # period (currently 10 minutes).  Figure out a better approach.
+        while not self._terminating.is_set() and (
+            time.time() - start) < self.RPC_MAXIMUM_WAIT.as_(Time.SECONDS):
+
+          # Only automatically append a SessionKey if this is not part of the read-only API.
+          auth_args = () if hasattr(ReadOnlyScheduler.Iface, method_name) else (self.session_key(),)
+          try:
+            method = getattr(self.client(), method_name)
+            if not callable(method):
+              return method
+            return method(*(args + auth_args))
+          except (TTransport.TTransportException, self.TimeoutError) as e:
+            if not self._terminating:
+              log.warning('Connection error with scheduler: %s, reconnecting...' % e)
+              self.invalidate()
+              self._terminating.wait(self.RPC_RETRY_INTERVAL.as_(Time.SECONDS))
+          except Exception as e:
+            # Take any error that occurs during the RPC call, and transform it
+            # into something clients can handle.
+            if not self._terminating:
+              raise self.ThriftInternalError("Error during thrift call %s to %s: %s" %
+                                            (method_name, self.cluster.name, e))
+        if not self._terminating:
+          raise self.TimeoutError('Timed out attempting to issue %s to %s' % (
+              method_name, self.cluster.name))
 
     return method_wrapper

@@ -42,6 +42,7 @@ buildDir = 'dist'
 def generatedDir = "$buildDir/generated-src"
 def generatedJavaDir = "$generatedDir/gen-java"
 def generatedJSDir = "$generatedDir/gen-js"
+def generatedResourceDir = "$generatedDir/resources"
 
 def thriftVersion = '0.9.1'
 
@@ -116,6 +117,7 @@ sourceSets {
     resources {
       srcDir '3rdparty/javascript'
       srcDir generatedJSDir
+      srcDir generatedResourceDir
     }
   }
   test {
@@ -144,11 +146,13 @@ dependencies {
   def slf4jRev = '1.6.1'
   def junitRev = '4.11'
 
+  def gsonDep = 'com.google.code.gson:gson:2.2.4'
   def guavaDep = 'com.google.guava:guava:16.0'
   def thriftLib = "org.apache.thrift:libthrift:${thriftVersion}"
 
   compile 'aopalliance:aopalliance:1.0'
   compile 'com.google.code.findbugs:jsr305:2.0.1'
+  compile gsonDep
   compile guavaDep
   compile 'com.google.inject:guice:3.0'
   compile 'com.google.protobuf:protobuf-java:2.5.0'
@@ -172,8 +176,6 @@ dependencies {
   compile "org.slf4j:slf4j-api:${slf4jRev}"
   compile "org.slf4j:slf4j-jdk14:${slf4jRev}"
   compile 'com.twitter.common.logging:log4j:0.0.7'
-  compile 'com.twitter.common.webassets:bootstrap:0.0.4'
-  compile 'com.twitter.common.webassets:jquery:0.0.4'
   compile 'com.twitter.common.zookeeper.guice:client-flagged:0.0.5'
   compile 'com.twitter.common.zookeeper.guice:client:0.0.5'
   compile 'com.twitter.common.zookeeper:candidate:0.0.64'
@@ -183,7 +185,6 @@ dependencies {
   compile 'com.twitter.common.zookeeper:singleton-service:0.0.85'
   compile 'com.twitter.common:application-http:0.0.59'
   compile 'com.twitter.common:application-module-applauncher:0.0.51'
-  compile 'com.twitter.common:application-module-http:0.0.62'
   compile 'com.twitter.common:application-module-lifecycle:0.0.48'
   compile 'com.twitter.common:application-module-log:0.0.56'
   compile 'com.twitter.common:application-module-stats:0.0.44'
@@ -197,21 +198,23 @@ dependencies {
   compile 'com.twitter.common:io:0.0.53'
   compile 'com.twitter.common:jdk-logging:0.0.44'
   compile 'com.twitter.common:logging:0.0.61'
+  compile 'com.twitter.common:net-http-handlers-time-series:0.0.51'
   compile 'com.twitter.common:net-util:0.0.80'
   compile 'com.twitter.common:quantity:0.0.71'
   compile 'com.twitter.common:stats:0.0.91'
-  compile 'com.twitter.common:testing-easymock:0.0.4'
   compile 'com.twitter.common:thrift:0.0.68'
   compile 'com.twitter.common:util-executor-service-shutdown:0.0.49'
-  compile 'com.twitter.common:util-system-mocks:0.0.72'
   compile 'com.twitter.common:util-templating:0.0.25'
   compile 'com.twitter.common:util-testing:0.0.10'
   compile 'com.twitter.common:util:0.0.94'
-  compile 'com.twitter.common:zookeeper-testing:0.0.45'
 
   testCompile "com.sun.jersey:jersey-client:${jerseyRev}"
+  testCompile 'com.twitter.common:testing-easymock:0.0.4'
+  testCompile 'com.twitter.common:util-system-mocks:0.0.72'
+  testCompile 'com.twitter.common:zookeeper-testing:0.0.45'
   testCompile "junit:junit:${junitRev}"
 
+  generatedCompile gsonDep
   generatedCompile guavaDep
   generatedCompile thriftLib
 
@@ -224,6 +227,7 @@ dependencies {
 
       def forceDepVersions = [
         // Force versions based on the dependencies we use from above
+        'com.google.code.gson:gson': '2.2.4',
         'org.slf4j:slf4j-api' : slf4jRev,
         'log4j:log4j' : log4jRev,
         'org.apache.thrift:libthrift' : thriftVersion,
@@ -360,6 +364,8 @@ tasks.checkstyleMain.dependsOn(jsHint)
  * contain the path to the thrift executable when finished
  */
 task bootstrapThrift {
+  logging.captureStandardOutput LogLevel.INFO
+
   project.ext.set('thrift', '')
 
   try {
@@ -389,13 +395,15 @@ task bootstrapThrift {
 }
 
 task generateSources(dependsOn: ['bootstrapThrift', 'checkPython']) {
-  ext.inputFiles = fileTree(dir: 'src/main/thrift').matching { include '**/*.thrift' }
+  def codeGenerator = 'src/main/python/apache/aurora/tools/java/thrift_wrapper_codegen.py';
+  def thriftFiles = fileTree(dir: 'src/main/thrift').matching { include '**/*.thrift' }
+  ext.inputFiles = thriftFiles + files(codeGenerator)
   ext.outputDir = file(generatedDir)
   inputs.file inputFiles
   outputs.dir outputDir
   doLast {
     outputDir.exists() || outputDir.mkdirs()
-    inputFiles.each { File file ->
+    thriftFiles.each { File file ->
       exec {
         executable = project.thrift
         args = ['--gen', 'java:hashcode', '--gen', 'js:jquery', '-o', outputDir, file]
@@ -403,9 +411,10 @@ task generateSources(dependsOn: ['bootstrapThrift', 'checkPython']) {
     }
     exec {
       executable = project.py
-      args = ['src/main/python/apache/aurora/tools/java/thrift_wrapper_codegen.py',
+      args = [codeGenerator,
               'src/main/thrift/org/apache/aurora/gen/api.thrift',
-              generatedJavaDir]
+              generatedJavaDir,
+              generatedResourceDir]
     }
   }
 }
@@ -424,7 +433,7 @@ ideaProject.dependsOn generateSources
 
 idea {
   module {
-    def codegenDirs = [file(generatedJavaDir), file(generatedJSDir)]
+    def codegenDirs = [file(generatedJavaDir)]
 
     // These directories must exist, else the plugin omits them from the
     // generated project. Since this is executed during the configuration

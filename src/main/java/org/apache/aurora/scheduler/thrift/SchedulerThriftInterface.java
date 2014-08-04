@@ -91,6 +91,8 @@ import org.apache.aurora.gen.SessionKey;
 import org.apache.aurora.gen.StartMaintenanceResult;
 import org.apache.aurora.gen.TaskConfig;
 import org.apache.aurora.gen.TaskQuery;
+import org.apache.aurora.gen.UpdateQuery;
+import org.apache.aurora.gen.UpdateRequest;
 import org.apache.aurora.scheduler.base.JobKeys;
 import org.apache.aurora.scheduler.base.Jobs;
 import org.apache.aurora.scheduler.base.Query;
@@ -775,35 +777,50 @@ class SchedulerThriftInterface implements AuroraAdmin.Iface {
   @Override
   public Response restartShards(
       JobKey mutableJobKey,
-      Set<Integer> shardIds,
-      Lock mutableLock,
+      final Set<Integer> shardIds,
+      @Nullable final Lock mutableLock,
       SessionKey session) {
 
-    IJobKey jobKey = JobKeys.assertValid(IJobKey.build(mutableJobKey));
+    final IJobKey jobKey = JobKeys.assertValid(IJobKey.build(mutableJobKey));
     checkNotBlank(shardIds);
     requireNonNull(session);
+    final Response response = emptyResponse();
 
-    Response response = Util.emptyResponse();
-    SessionContext context;
+    final SessionContext context;
     try {
       context = sessionValidator.checkAuthenticated(session, ImmutableSet.of(jobKey.getRole()));
     } catch (AuthFailedException e) {
       return addMessage(response, AUTH_FAILED, e);
     }
 
-    try {
-      lockManager.validateIfLocked(
-          ILockKey.build(LockKey.job(jobKey.newBuilder())),
-          Optional.fromNullable(mutableLock).transform(ILock.FROM_BUILDER));
-      schedulerCore.restartShards(jobKey, shardIds, context.getIdentity());
-      response.setResponseCode(OK);
-    } catch (LockException e) {
-      addMessage(response, LOCK_ERROR, e);
-    } catch (ScheduleException e) {
-      addMessage(response, INVALID_REQUEST, e);
-    }
+    return storage.write(new MutateWork.Quiet<Response>() {
+      @Override
+      public Response apply(MutableStoreProvider storeProvider) {
+        try {
+          lockManager.validateIfLocked(
+              ILockKey.build(LockKey.job(jobKey.newBuilder())),
+              Optional.fromNullable(mutableLock).transform(ILock.FROM_BUILDER));
+        } catch (LockException e) {
+          return addMessage(response, LOCK_ERROR, e);
+        }
 
-    return response;
+        Query.Builder query = Query.instanceScoped(jobKey, shardIds).active();
+        Set<IScheduledTask> matchingTasks = storeProvider.getTaskStore().fetchTasks(query);
+        if (matchingTasks.size() != shardIds.size()) {
+          return addMessage(response, INVALID_REQUEST, "Not all requested shards are active.");
+        }
+
+        LOG.info("Restarting shards matching " + query);
+        for (String taskId : Tasks.ids(matchingTasks)) {
+          stateManager.changeState(
+              taskId,
+              Optional.<ScheduleStatus>absent(),
+              ScheduleStatus.RESTARTING,
+              restartedByMessage(context.getIdentity()));
+        }
+        return response.setResponseCode(OK);
+      }
+    });
   }
 
   @Override
@@ -874,17 +891,20 @@ class SchedulerThriftInterface implements AuroraAdmin.Iface {
     requireNonNull(status);
     requireNonNull(session);
 
-    Response response = Util.emptyResponse();
     SessionContext context;
     try {
       // TODO(Sathya): Remove this after AOP-style session validation passes in a SessionContext.
       context = sessionValidator.checkAuthorized(session, Capability.ROOT, AuditCheck.REQUIRED);
     } catch (AuthFailedException e) {
-      addMessage(response, AUTH_FAILED, e);
-      return response;
+      return addMessage(emptyResponse(), AUTH_FAILED, e);
     }
 
-    schedulerCore.setTaskStatus(taskId, status, transitionMessage(context.getIdentity()));
+    stateManager.changeState(
+        taskId,
+        Optional.<ScheduleStatus>absent(),
+        status,
+        transitionMessage(context.getIdentity()));
+
     return okEmptyResponse();
   }
 
@@ -1226,6 +1246,36 @@ class SchedulerThriftInterface implements AuroraAdmin.Iface {
         new GetLocksResult().setLocks(ILock.toBuildersSet(lockManager.getLocks()))));
   }
 
+  @Override
+  public Response startUpdate(UpdateRequest request, Lock lock, SessionKey session) {
+    throw new UnsupportedOperationException("Not implemented");
+  }
+
+  @Override
+  public Response pauseUpdate(String updateId, Lock lock, SessionKey session) {
+    throw new UnsupportedOperationException("Not implemented");
+  }
+
+  @Override
+  public Response resumeUpdate(String updateId, Lock lock, SessionKey session) {
+    throw new UnsupportedOperationException("Not implemented");
+  }
+
+  @Override
+  public Response abortUpdate(String updateId, Lock lock, SessionKey session) {
+    throw new UnsupportedOperationException("Not implemented");
+  }
+
+  @Override
+  public Response getUpdates(UpdateQuery updateQuery) throws TException {
+    throw new UnsupportedOperationException("Not implemented");
+  }
+
+  @Override
+  public Response getUpdateDetails(String updateId) {
+    throw new UnsupportedOperationException("Not implemented");
+  }
+
   @VisibleForTesting
   static Optional<String> transitionMessage(String user) {
     return Optional.of("Transition forced by " + user);
@@ -1234,6 +1284,11 @@ class SchedulerThriftInterface implements AuroraAdmin.Iface {
   @VisibleForTesting
   static Optional<String> killedByMessage(String user) {
     return Optional.of("Killed by " + user);
+  }
+
+  @VisibleForTesting
+  static Optional<String> restartedByMessage(String user) {
+    return Optional.of("Restarted by " + user);
   }
 
   @VisibleForTesting
