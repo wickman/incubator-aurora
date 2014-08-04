@@ -47,45 +47,9 @@ validate_serverset() {
   local retcode=0
 
   # launch aurora client in interpreter mode to get access to the kazoo client
-  vagrant ssh -c "env SERVERSET="$1" PEX_INTERPRETER=1 aurora" <<EOF >& /dev/null || retcode=$?
-import os, posixpath, sys, time
-from kazoo.client import KazooClient
-from kazoo.exceptions import NoNodeError
-
-OK = 1
-DID_NOT_REGISTER = 2
-DID_NOT_RECOVER_FROM_EXPIRY = 3
-
-serverset = os.getenv('SERVERSET')
-client = KazooClient('localhost:2181')
-client.start()
-
-def wait_until_znodes(count, timeout=30):
-  now = time.time()
-  timeout += now
-  while now < timeout:
-    try:
-      children = client.get_children(serverset)
-    except NoNodeError:
-      children = []
-    if len(children) == count:
-      return [posixpath.join(serverset, child) for child in children]
-    time.sleep(1)
-    now += 1
-  return []
-
-znodes = wait_until_znodes(2, timeout=10)
-if not znodes:
-  sys.exit(DID_NOT_REGISTER)
-
-client.delete(znodes[0])
-
-znodes = wait_until_znodes(2, timeout=10)
-if not znodes:
-  sys.exit(DID_NOT_RECOVER_FROM_EXPIRY)
-
-sys.exit(OK)
-EOF
+  vagrant ssh -c \
+      "env SERVERSET="$1" PEX_INTERPRETER=1 aurora /vagrant/src/test/sh/org/apache/aurora/e2e/validate_serverset.py" \
+      || retcode=$?
 
   if [[ $retcode = 1 ]]; then
     echo "Validated announced job."
