@@ -32,7 +32,7 @@ def wait_until_znodes(count, timeout=30):
   return []
 
 
-# job is created with 4
+# job is created with 4 znodes.
 znodes = wait_until_znodes(4, timeout=10)
 if not znodes:
   sys.exit(DID_NOT_REGISTER)
