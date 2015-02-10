@@ -22,6 +22,7 @@ polls a designated Thermos checkpoint root and collates information about all ta
 import os
 import threading
 import time
+from collections import namedtuple
 from operator import attrgetter
 
 from twitter.common import log
@@ -30,7 +31,7 @@ from twitter.common.lang import Lockable
 from twitter.common.quantity import Amount, Time
 
 from apache.thermos.common.path import TaskPath
-from apache.thermos.monitoring.detector import TaskDetector
+from apache.thermos.monitoring.detector import PathDetector, TaskDetector
 from apache.thermos.monitoring.monitor import TaskMonitor
 from apache.thermos.monitoring.process import ProcessSample
 from apache.thermos.monitoring.resource import ResourceMonitorBase, TaskResourceMonitor
@@ -38,6 +39,51 @@ from apache.thermos.monitoring.resource import ResourceMonitorBase, TaskResource
 from .observed_task import ActiveObservedTask, FinishedObservedTask
 
 from gen.apache.thermos.ttypes import ProcessState, TaskState
+
+
+class ObserverTaskDetector(object):
+  def __init__(self, path_detector):
+    self._path_detector = path_detector
+    self._active_tasks = {} # task_id => root
+    self._finished_tasks = {}  # task_id => root
+  
+  @property
+  def active_tasks(self):
+    return self._active_tasks.copy()
+  
+  @property
+  def finished_tasks(self):
+    return self._finished_tasks.copy()
+
+  def _iter_tasks(self):
+    # returns an iterator of root, task_id, active/finished
+    for root in self._path_detector:    
+      for status, task_id in TaskDetector(root=root):
+        yield (root, task_id, status)
+  
+  def refresh(self):
+    for root, task_id, status in self._iter_tasks():
+      # Ensure all tasks currently detected on the system are observed appropriately
+      for active in active_tasks:
+        if active not in self.active_tasks:
+          log.debug('task_id %s (unknown) -> active' % active)
+          self.add_active_task(active)
+      for finished in finished_tasks:
+        if finished in self.active_tasks:
+          log.debug('task_id %s active -> finished' % finished)
+          self.active_to_finished(finished)
+        elif finished not in self.finished_tasks:
+          log.debug('task_id %s (unknown) -> finished' % finished)
+          self.add_finished_task(finished)
+
+      # Remove ObservedTasks for tasks no longer detected on the system
+      for unknown in set(self.active_tasks) - set(active_tasks + finished_tasks):
+        log.debug('task_id %s active -> (unknown)' % unknown)
+        self.remove_active_task(unknown)
+      for unknown in set(self.finished_tasks) - set(active_tasks + finished_tasks):
+        log.debug('task_id %s finished -> (unknown)' % unknown)
+        self.remove_finished_task(unknown)
+
 
 
 class TaskObserver(ExceptionalThread, Lockable):
@@ -54,9 +100,9 @@ class TaskObserver(ExceptionalThread, Lockable):
 
   POLLING_INTERVAL = Amount(1, Time.SECONDS)
 
-  def __init__(self, root, resource_monitor_class=TaskResourceMonitor):
+  def __init__(self, path_detector, resource_monitor_class=TaskResourceMonitor):
+    self._path_detector = path_detector
     self._pathspec = TaskPath(root=root)
-    self._detector = TaskDetector(root)
     if not issubclass(resource_monitor_class, ResourceMonitorBase):
       raise ValueError("resource monitor class must implement ResourceMonitorBase!")
     self._resource_monitor = resource_monitor_class
@@ -101,14 +147,17 @@ class TaskObserver(ExceptionalThread, Lockable):
     resource_monitor = self._resource_monitor(task_monitor, sandbox)
     resource_monitor.start()
     self._active_tasks[task_id] = ActiveObservedTask(
-      task_id=task_id, pathspec=self._pathspec,
-      task_monitor=task_monitor, resource_monitor=resource_monitor
+      task_id=task_id,
+      pathspec=self._pathspec,
+      task_monitor=task_monitor,
+      resource_monitor=resource_monitor
     )
 
   @Lockable.sync
   def add_finished_task(self, task_id):
     self._finished_tasks[task_id] = FinishedObservedTask(
-      task_id=task_id, pathspec=self._pathspec
+      task_id=task_id,
+      pathspec=self._pathspec
     )
 
   @Lockable.sync
