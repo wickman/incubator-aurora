@@ -53,6 +53,7 @@ python_library(
   name = 'task_observer',
   sources = ['task_observer.py'],
   dependencies = [
+    ':database',
     ':observed_task',
     '3rdparty/python:twitter.common.exceptions',
     '3rdparty/python:twitter.common.lang',

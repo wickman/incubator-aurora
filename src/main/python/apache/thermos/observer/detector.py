@@ -38,8 +38,8 @@ class ObserverTaskDetector(object):
 
   def iter_tasks(self):
     # returns an iterator of root, task_id, active/finished
-    for root in self._path_detector:
-      for status, task_id in TaskDetector(root=root):
+    for root in self._path_detector.get_paths():
+      for status, task_id in TaskDetector(root=root).get_task_ids():
         yield (root, task_id, status)
 
   def refresh(self):

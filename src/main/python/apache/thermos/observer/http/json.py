@@ -12,31 +12,57 @@
 # limitations under the License.
 #
 
+import json
 import urllib
 
+from thrift.protocol import TJSONProtocol
+from thrift.TSerialization import serialize as thrift_serialize
 from twitter.common.http import HttpServer
 
 
+def thrift_to_json(blob):
+  return json.loads(thrift_serialize(blob, TJSONProtocol.TSimpleJSONProtocolFactory()))
+
+
 class TaskObserverJSONBindings(object):
-  """
-    Mixin for Thermos observer JSON endpoints.
-  """
+  """Mixin for Thermos observer JSON endpoints."""
+
+  DEFAULT_PAGINATION = 20
+
+  def __init__(self, database):
+    self._database = database
+
+  def __get_task_ids(self, which=None, offset=None, num=None):
+    if which is None:
+      task_ids = self._database.get_all_tasks()
+    elif which == 'active':
+      task_ids = self._database.get_active_tasks()
+    elif which == 'finished':
+      task_ids = self._database.get_finished_tasks()
+    else:
+      HttpServer.abort(404, 'Unknown task type: %s' % which)
+    try:
+      offset = int(offset) if offset is not None else 0
+      num = int(num) if num is not None else 20
+    except ValueError:
+      HttpServer.abort(404, 'Invalid offset or count.')
+    return sorted(task_ids)[offset:offset + num]
 
   @HttpServer.route("/j/task_ids")
   @HttpServer.route("/j/task_ids/:which")
   @HttpServer.route("/j/task_ids/:which/:offset")
   @HttpServer.route("/j/task_ids/:which/:offset/:num")
   def handle_task_ids(self, which=None, offset=None, num=None):
-    return self._observer.task_ids(
-      which,
-      int(offset) if offset is not None else 0,
-      int(num) if num is not None else 20)
+    return self.__get_task_ids(which, offset, num)
 
-  @HttpServer.route("/j/task_id_count")
-  def handle_task_id_count(self):
-    return self._observer.task_id_count()
+  @HttpServer.route("/j/task/:task_id")
+  def handle_task(self, task_id):
+    task = self._database.get_state(task_id).get(task_id)
+    if task is None:
+      HttpServer.abort(404, 'Task %s not found' % task_id)
+    return thrift_to_json(task)
 
-  @HttpServer.route("/j/task")
+  @HttpServer.route("/j/tasks")
   def handle_tasks(self):
     """
       Additional parameters:
@@ -45,17 +71,24 @@ class TaskObserverJSONBindings(object):
     task_ids = HttpServer.Request.GET.get('task_id', [])
     if task_ids:
       task_ids = urllib.unquote(task_ids).split(',')
-    return self._observer.tasks(task_ids)
+    else:
+      return {}
+    return dict(
+        (task_id, thrift_to_json(task_blob))
+        for (task_id, task_blob) in self._database.get_state(*task_ids).items()
+        if task_blob is not None)
 
-  @HttpServer.route("/j/task/:task_id")
-  def handle_task(self, task_id):
-    return self._observer.tasks([task_id])
-
-  @HttpServer.route("/j/process/:task_id")
   @HttpServer.route("/j/process/:task_id/:process")
   @HttpServer.route("/j/process/:task_id/:process/:run")
-  def handle_process(self, task_id, process=None, run=None):
-    return self._observer.process(task_id, process, run)
+  def handle_process(self, task_id, process, run=None):
+    task = self._database.get_state(task_id).get(task_id)
+    if task is None:
+      HttpServer.abort(404, 'Task %s not found' % task_id)
+    run = run if run is not None else -1
+    try:
+      return thrift_to_json(task.processes[process][run])
+    except (KeyError, ValueError):
+      HttpServer.abort(404, 'Process %s or run %d not found.' % (process, run))
 
   @HttpServer.route("/j/processes")
   def handle_processes(self):
@@ -66,4 +99,20 @@ class TaskObserverJSONBindings(object):
     task_ids = HttpServer.Request.GET.get('task_id', [])
     if task_ids:
       task_ids = urllib.unquote(task_ids).split(',')
-    return self._observer.processes(task_ids)
+    else:
+      return {}
+    return dict(
+        (task_id, runner_state.processes.keys())
+        for (task_id, runner_state) in self._database.get_state(*task_ids).items()
+        if runner_state is not None)
+
+
+"""
+from apache.thermos.observer.http.json import TaskObserverJSONBindings
+from apache.thermos.observer.database import TaskObserverDatabase
+from apache.thermos.monitoring.detector import FixedPathDetector
+fpd = FixedPathDetector('/var/run/thermos')
+db = TaskObserverDatabase(fpd)
+db.start()
+js = TaskObserverJSONBindings(db)
+"""
