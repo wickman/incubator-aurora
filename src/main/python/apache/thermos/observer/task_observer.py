@@ -20,194 +20,20 @@ polls a designated Thermos checkpoint root and collates information about all ta
 
 """
 import os
-import threading
-import time
-from collections import namedtuple
 from operator import attrgetter
 
 from twitter.common import log
-from twitter.common.exceptions import ExceptionalThread
 from twitter.common.lang import Lockable
-from twitter.common.quantity import Amount, Time
 
-from apache.thermos.common.path import TaskPath
-from apache.thermos.monitoring.detector import PathDetector, TaskDetector
-from apache.thermos.monitoring.monitor import TaskMonitor
 from apache.thermos.monitoring.process import ProcessSample
-from apache.thermos.monitoring.resource import ResourceMonitorBase, TaskResourceMonitor
-
-from .observed_task import ActiveObservedTask, FinishedObservedTask
 
 from gen.apache.thermos.ttypes import ProcessState, TaskState
 
 
-class ObserverTaskDetector(object):
-  def __init__(self, path_detector):
-    self._path_detector = path_detector
-    self._active_tasks = {} # task_id => root
-    self._finished_tasks = {}  # task_id => root
-  
-  @property
-  def active_tasks(self):
-    return self._active_tasks.copy()
-  
-  @property
-  def finished_tasks(self):
-    return self._finished_tasks.copy()
-
-  def _iter_tasks(self):
-    # returns an iterator of root, task_id, active/finished
-    for root in self._path_detector:    
-      for status, task_id in TaskDetector(root=root):
-        yield (root, task_id, status)
-  
-  def refresh(self):
-    for root, task_id, status in self._iter_tasks():
-      # Ensure all tasks currently detected on the system are observed appropriately
-      for active in active_tasks:
-        if active not in self.active_tasks:
-          log.debug('task_id %s (unknown) -> active' % active)
-          self.add_active_task(active)
-      for finished in finished_tasks:
-        if finished in self.active_tasks:
-          log.debug('task_id %s active -> finished' % finished)
-          self.active_to_finished(finished)
-        elif finished not in self.finished_tasks:
-          log.debug('task_id %s (unknown) -> finished' % finished)
-          self.add_finished_task(finished)
-
-      # Remove ObservedTasks for tasks no longer detected on the system
-      for unknown in set(self.active_tasks) - set(active_tasks + finished_tasks):
-        log.debug('task_id %s active -> (unknown)' % unknown)
-        self.remove_active_task(unknown)
-      for unknown in set(self.finished_tasks) - set(active_tasks + finished_tasks):
-        log.debug('task_id %s finished -> (unknown)' % unknown)
-        self.remove_finished_task(unknown)
-
-
-
-class TaskObserver(ExceptionalThread, Lockable):
-  """
-    The TaskObserver monitors the thermos checkpoint root for active/finished
-    tasks.  It is used to be the oracle of the state of all thermos tasks on
-    a machine.
-
-    It currently returns JSON, but really should just return objects.  We should
-    then build an object->json translator.
-  """
-  class UnexpectedError(Exception): pass
-  class UnexpectedState(Exception): pass
-
-  POLLING_INTERVAL = Amount(1, Time.SECONDS)
-
-  def __init__(self, path_detector, resource_monitor_class=TaskResourceMonitor):
-    self._path_detector = path_detector
-    self._pathspec = TaskPath(root=root)
-    if not issubclass(resource_monitor_class, ResourceMonitorBase):
-      raise ValueError("resource monitor class must implement ResourceMonitorBase!")
-    self._resource_monitor = resource_monitor_class
-    self._active_tasks = {}    # task_id => ActiveObservedTask
-    self._finished_tasks = {}  # task_id => FinishedObservedTask
-    self._stop_event = threading.Event()
-    ExceptionalThread.__init__(self)
-    Lockable.__init__(self)
-    self.daemon = True
-
-  @property
-  def active_tasks(self):
-    """Return a dictionary of active Tasks"""
-    return self._active_tasks
-
-  @property
-  def finished_tasks(self):
-    """Return a dictionary of finished Tasks"""
-    return self._finished_tasks
-
-  @property
-  def all_tasks(self):
-    """Return a dictionary of all Tasks known by the TaskObserver"""
-    return dict(self.active_tasks.items() + self.finished_tasks.items())
-
-  def stop(self):
-    self._stop_event.set()
-
-  def start(self):
-    ExceptionalThread.start(self)
-
-  @Lockable.sync
-  def add_active_task(self, task_id):
-    if task_id in self.finished_tasks:
-      log.error('Found an active task (%s) in finished tasks?' % task_id)
-      return
-    task_monitor = TaskMonitor(self._pathspec, task_id)
-    if not task_monitor.get_state().header:
-      log.info('Unable to load task "%s"' % task_id)
-      return
-    sandbox = task_monitor.get_state().header.sandbox
-    resource_monitor = self._resource_monitor(task_monitor, sandbox)
-    resource_monitor.start()
-    self._active_tasks[task_id] = ActiveObservedTask(
-      task_id=task_id,
-      pathspec=self._pathspec,
-      task_monitor=task_monitor,
-      resource_monitor=resource_monitor
-    )
-
-  @Lockable.sync
-  def add_finished_task(self, task_id):
-    self._finished_tasks[task_id] = FinishedObservedTask(
-      task_id=task_id,
-      pathspec=self._pathspec
-    )
-
-  @Lockable.sync
-  def active_to_finished(self, task_id):
-    self.remove_active_task(task_id)
-    self.add_finished_task(task_id)
-
-  @Lockable.sync
-  def remove_active_task(self, task_id):
-    task = self.active_tasks.pop(task_id)
-    task.resource_monitor.kill()
-
-  @Lockable.sync
-  def remove_finished_task(self, task_id):
-    self.finished_tasks.pop(task_id)
-
-  def run(self):
-    """
-      The internal thread for the observer.  This periodically polls the
-      checkpoint root for new tasks, or transitions of tasks from active to
-      finished state.
-    """
-    while not self._stop_event.is_set():
-      time.sleep(self.POLLING_INTERVAL.as_(Time.SECONDS))
-
-      active_tasks = [task_id for _, task_id in self._detector.get_task_ids(state='active')]
-      finished_tasks = [task_id for _, task_id in self._detector.get_task_ids(state='finished')]
-
-      with self.lock:
-
-        # Ensure all tasks currently detected on the system are observed appropriately
-        for active in active_tasks:
-          if active not in self.active_tasks:
-            log.debug('task_id %s (unknown) -> active' % active)
-            self.add_active_task(active)
-        for finished in finished_tasks:
-          if finished in self.active_tasks:
-            log.debug('task_id %s active -> finished' % finished)
-            self.active_to_finished(finished)
-          elif finished not in self.finished_tasks:
-            log.debug('task_id %s (unknown) -> finished' % finished)
-            self.add_finished_task(finished)
-
-        # Remove ObservedTasks for tasks no longer detected on the system
-        for unknown in set(self.active_tasks) - set(active_tasks + finished_tasks):
-          log.debug('task_id %s active -> (unknown)' % unknown)
-          self.remove_active_task(unknown)
-        for unknown in set(self.finished_tasks) - set(active_tasks + finished_tasks):
-          log.debug('task_id %s finished -> (unknown)' % unknown)
-          self.remove_finished_task(unknown)
+# XXX port everything to use the database instead.
+class TaskObserver(object):
+  def __init__(self, database):
+    self._database = database
 
   @Lockable.sync
   def process_from_name(self, task_id, process_id):
@@ -630,6 +456,7 @@ class TaskObserver(ExceptionalThread, Lockable):
     run = self.get_run_number(runner_state, process, run)
     if run is None:
       return {}
+    # XXX
     log_path = self._pathspec.given(task_id=task_id, process=process, run=run,
                                     log_dir=runner_state.header.log_dir).getpath('process_logdir')
     return dict(

@@ -100,10 +100,14 @@ class TaskMonitor(object):
     with self._lock:
       return self._apply_states()
 
+  def get_sandbox(self):
+    """Get the sandbox of this task, or None if it has not yet been discovered."""
+    state = self.get_state()
+    if state.header:
+      return state.header.sandbox
+
   def get_state(self):
-    """
-      Get the latest state of this Task.
-    """
+    """Get the latest state of this Task."""
     with self._lock:
       self._apply_states()
       return copy.deepcopy(self._runnerstate)

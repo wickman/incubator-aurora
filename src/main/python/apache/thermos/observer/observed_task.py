@@ -12,6 +12,7 @@
 # limitations under the License.
 #
 
+import copy
 import os
 from abc import abstractproperty
 
@@ -22,6 +23,8 @@ from twitter.common.lang import AbstractClass
 from apache.thermos.common.ckpt import CheckpointDispatcher
 from apache.thermos.config.loader import ThermosTaskWrapper
 from apache.thermos.config.schema import ThermosContext
+
+from gen.apache.thermos.ttypes import RunnerState
 
 
 class ObservedTask(AbstractClass):
@@ -147,4 +150,4 @@ class FinishedObservedTask(ObservedTask):
     if self._state is None:
       path = self._pathspec.given(task_id=self._task_id).getpath('runner_checkpoint')
       self._state = CheckpointDispatcher.from_file(path)
-    return self._state
+    return copy.deepcopy(self._state) if self._state else RunnerState(processes={})

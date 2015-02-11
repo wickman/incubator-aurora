@@ -108,7 +108,6 @@ class ResourceManagerProvider(StatusCheckerProvider):
     task_monitor = TaskMonitor(task_path, task_id)
     resource_monitor = TaskResourceMonitor(
         task_monitor,
-        sandbox.root,
         disk_collector=self._disk_collector,
         disk_collection_interval=self._disk_collection_interval)
     return ResourceManager(resources, resource_monitor)
