@@ -30,17 +30,17 @@ from .static_assets import StaticAssets
 from .templating import HttpTemplate
 
 
-class BottleObserver(HttpServer, StaticAssets, TaskObserverFileBrowser, TaskObserverJSONBindings):
-  """
-    A bottle wrapper around a Thermos TaskObserver.
-  """
-
+# self.get_task => short circuit 404
+# _observer._task (?!)
+# _observer.main(type, offset, num)
+# _observer.processes(task_id)
+# _observer.state(task_id)
+# _observer.task_statuses(task_id)
+# _observer.processes(task_id)
+# _observer.process_from_name(task_id, process_name)
+class TaskObserverUserInterface(object):
   def __init__(self, observer):
     self._observer = observer
-    StaticAssets.__init__(self)
-    TaskObserverFileBrowser.__init__(self)
-    TaskObserverJSONBindings.__init__(self)
-    HttpServer.__init__(self)
 
   @HttpServer.route("/")
   @HttpServer.view(HttpTemplate.load('index'))
@@ -136,3 +136,14 @@ class BottleObserver(HttpServer, StaticAssets, TaskObserverFileBrowser, TaskObse
     template['runs'] = all_processes
     log.debug('Rendering template is: %s' % template)
     return template
+
+
+class BottleObserver(HttpServer):
+  """A bottle wrapper around a Thermos TaskObserver."""
+
+  def __init__(self, observer):
+    self.mount_routes(StaticAssets())
+    self.mount_routes(TaskObserverFileBrowser(observer))
+    self.mount_routes(TaskObserverJSONBindings(observer))
+    self.mount_routes(TaskObserverUserInterface(observer))
+    super(BottleObserver, self).__init__()

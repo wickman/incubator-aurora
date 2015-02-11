@@ -36,8 +36,7 @@ class StaticAssets(object):
     cached_assets = {}
     for asset in assets:
       log.info('  detected asset: %s' % asset)
-      cached_assets[asset] = pkg_resources.resource_string(
-        __name__, os.path.join('assets', asset))
+      cached_assets[asset] = pkg_resources.resource_string(__name__, os.path.join('assets', asset))
     self._assets = cached_assets
 
   @HttpServer.route("/favicon.ico")
@@ -46,7 +45,6 @@ class StaticAssets(object):
 
   @HttpServer.route("/assets/:filename")
   def handle_asset(self, filename):
-    # TODO(wickman)  Add static_content to bottle.
     if filename in self._assets:
       mimetype, encoding = mimetypes.guess_type(filename)
       headers = {}
