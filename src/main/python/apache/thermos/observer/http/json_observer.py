@@ -108,7 +108,7 @@ class TaskObserverJSONBindings(object):
 
 
 """
-from apache.thermos.observer.http.json import TaskObserverJSONBindings
+from apache.thermos.observer.http.json_observer import TaskObserverJSONBindings
 from apache.thermos.observer.database import TaskObserverDatabase
 from apache.thermos.monitoring.detector import FixedPathDetector
 fpd = FixedPathDetector('/var/run/thermos')

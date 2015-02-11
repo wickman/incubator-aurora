@@ -13,8 +13,8 @@
 #
 
 python_library(
-  name = 'json',
-  sources = ['json.py'],
+  name = 'json_observer',
+  sources = ['json_observer.py'],
   dependencies = [
     '3rdparty/python:twitter.common.http',
   ]

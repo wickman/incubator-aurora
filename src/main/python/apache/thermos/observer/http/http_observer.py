@@ -25,7 +25,7 @@ from twitter.common import log
 from twitter.common.http import HttpServer
 
 from .file_browser import TaskObserverFileBrowser
-from .json import TaskObserverJSONBindings
+from .json_observer import TaskObserverJSONBindings
 from .static_assets import StaticAssets
 from .templating import HttpTemplate
 
