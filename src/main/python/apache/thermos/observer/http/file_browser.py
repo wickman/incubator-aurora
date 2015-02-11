@@ -121,8 +121,8 @@ class TaskObserverFileBrowser(object):
 
   @HttpServer.route('/logdata/:task_id/:process/:run/:logtype')
   def handle_logdata(self, task_id, process, run, logtype):
-    offset = self.Request.GET.get('offset', -1)
-    length = self.Request.GET.get('length', -1)
+    offset = HttpServer.Request.GET.get('offset', -1)
+    length = HttpServer.Request.GET.get('length', -1)
     filename = self.__get_log_filename(task_id, process, run, logtype)
     return _read_chunk(filename, offset, length)
 
@@ -140,8 +140,8 @@ class TaskObserverFileBrowser(object):
   def handle_filedata(self, task_id, path):
     if path is None:
       return {}
-    offset = self.Request.GET.get('offset', -1)
-    length = self.Request.GET.get('length', -1)
+    offset = HttpServer.Request.GET.get('offset', -1)
+    length = HttpServer.Request.GET.get('length', -1)
     chroot, path = self.__get_file(task_id, path)
     if chroot is None or path is None:
       bottle.abort(404, 'Invalid file.')

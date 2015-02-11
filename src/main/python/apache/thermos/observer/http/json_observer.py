@@ -62,6 +62,13 @@ class TaskObserverJSONBindings(object):
       HttpServer.abort(404, 'Task %s not found' % task_id)
     return thrift_to_json(task)
 
+  def _tasks(self, task_ids=None):
+    task_ids = task_ids or []
+    return dict(
+        (task_id, task_blob)
+        for (task_id, task_blob) in self._database.get_state(*task_ids).items()
+        if task_blob is not None)
+
   @HttpServer.route("/j/tasks")
   def handle_tasks(self):
     """
@@ -75,8 +82,7 @@ class TaskObserverJSONBindings(object):
       return {}
     return dict(
         (task_id, thrift_to_json(task_blob))
-        for (task_id, task_blob) in self._database.get_state(*task_ids).items()
-        if task_blob is not None)
+        for (task_id, task_blob) in self._tasks(task_ids).items())
 
   @HttpServer.route("/j/process/:task_id/:process")
   @HttpServer.route("/j/process/:task_id/:process/:run")
@@ -103,8 +109,7 @@ class TaskObserverJSONBindings(object):
       return {}
     return dict(
         (task_id, runner_state.processes.keys())
-        for (task_id, runner_state) in self._database.get_state(*task_ids).items()
-        if runner_state is not None)
+        for (task_id, runner_state) in self._tasks(task_ids))
 
 
 """

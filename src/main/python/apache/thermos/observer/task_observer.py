@@ -19,7 +19,6 @@ finished Thermos tasks on a system. The primary entry point is the TaskObserver,
 polls a designated Thermos checkpoint root and collates information about all tasks it discovers.
 
 """
-import os
 from operator import attrgetter
 
 from twitter.common import log
