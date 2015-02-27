@@ -20,13 +20,13 @@ def kill(args, options):
     print('Must specify tasks!', file=sys.stderr)
     return
 
-  matched_tasks = tasks_from_re(args, options.root, state='active')
+  matched_tasks = tasks_from_re(args, state='active')
 
   if not matched_tasks:
     print('No active tasks matched.')
     return
 
-  for task_id in matched_tasks:
+  for root, task_id in matched_tasks:
     print('Killing %s...' % task_id, end='')
-    TaskRunnerHelper.kill(task_id, options.root, force=True)
+    TaskRunnerHelper.kill(task_id, root, force=True)
     print('done.')

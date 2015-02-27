@@ -56,7 +56,7 @@ def simplerun(args, options):
     processes=[Process(name=options.name, cmdline=cmdline)]))
 
   really_run(thermos_task,
-             options.root,
+             options.root,  # hrm -- we should make this dep explicit ideally
              None,
              task_id=options.task_id,
              user=options.user,

@@ -3,7 +3,7 @@ from __future__ import print_function
 from twitter.common import app
 from twitter.common.quantity.parse_simple import parse_data, parse_time
 
-from apache.thermos.cli.common import tasks_from_re
+from apache.thermos.cli.common import get_path_detector, tasks_from_re
 from apache.thermos.monitoring.garbage import GarbageCollectionPolicy, TaskGarbageCollector
 
 
@@ -69,12 +69,11 @@ def gc(args, options):
                     verbose=True,
                     logger=print)
   if args:
-    gc_tasks = [(options.root, task_id)
-        for task_id in tasks_from_re(args, options.root, state='finished')]
+    gc_tasks = list(tasks_from_re(args, state='finished'))
   else:
     print('No task ids specified, using default collector.')
     gc_tasks = [(task.checkpoint_root, task.task_id)
-        for task in GarbageCollectionPolicy(**gc_options).run()]
+        for task in GarbageCollectionPolicy(get_path_detector(), **gc_options).run()]
 
   if not gc_tasks:
     print('No tasks to garbage collect.  Exiting')

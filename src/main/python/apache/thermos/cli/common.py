@@ -61,17 +61,7 @@ def daemonize():
                                        open('/dev/null', 'a+', 0))  # noqa
 
 
-def tasks_from_re(expressions, root, state=None):
-  task_ids = [t_id for _, t_id in TaskDetector(root=root).get_task_ids(state=state)]
-  matched_tasks = set()
-  for task_expr in map(re.compile, expressions):
-    for task_id in task_ids:
-      if task_expr.match(task_id):
-        matched_tasks.add(task_id)
-  return matched_tasks
-
-
-def _really_run(
+def really_run(
     task,
     root,
     sandbox,
@@ -126,3 +116,18 @@ def register_path_detector(path_detector):
 
 def get_path_detector():
   return ChainedPathDetector(*__PATH_DETECTORS)
+
+
+def tasks_from_re(expressions, state=None):
+  path_detector = get_path_detector()
+
+  matched_tasks = set()
+
+  for root in path_detector.get_paths():
+    task_ids = [t_id for _, t_id in TaskDetector(root).get_task_ids(state=state)]
+    for task_expr in map(re.compile, expressions):
+      for task_id in task_ids:
+        if task_expr.match(task_id):
+          matched_tasks.add((root, task_id))
+
+  return matched_tasks

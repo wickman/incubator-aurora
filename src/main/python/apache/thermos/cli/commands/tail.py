@@ -8,6 +8,7 @@ from twitter.common import app
 from twitter.common.dirutil import tail_f
 from twitter.common.dirutil.tail import tail as tail_closed
 
+from apache.thermos.cli.common import get_path_detector
 from apache.thermos.common.ckpt import CheckpointDispatcher
 from apache.thermos.common.path import TaskPath
 from apache.thermos.monitoring.detector import TaskDetector
@@ -28,8 +29,16 @@ def tail(args, options):
     app.error('Expected at most two arguments (task and optional process), got %d' % len(args))
 
   task_id = args[0]
-  detector = TaskDetector(root=options.root)
-  checkpoint = CheckpointDispatcher.from_file(detector.get_checkpoint(task_id))
+  path_detector = get_path_detector()
+  for root in path_detector.get_paths():
+    detector = TaskDetector(root=options.root)
+    checkpoint = CheckpointDispatcher.from_file(detector.get_checkpoint(task_id))
+    if checkpoint:
+      break
+  else:
+    print('ERROR: Could not find task.')
+    sys.exit(1)
+
   log_dir = checkpoint.header.log_dir
   process_runs = [(process, run) for (process, run) in detector.get_process_runs(task_id, log_dir)]
   if len(args) == 2:

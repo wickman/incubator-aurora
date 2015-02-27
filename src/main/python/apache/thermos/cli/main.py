@@ -1,3 +1,10 @@
+from twitter.common import app
+
+from apache.thermos.monitoring.detector import FixedPathDetector
+
+from .common import register_path_detector
+
+
 def register_commands(app):
   from apache.thermos.cli.common import generate_usage
   from apache.thermos.cli.commands import (
@@ -25,3 +32,34 @@ def register_commands(app):
   )
 
   generate_usage()
+
+
+def register_root(option, opt, value, parser):
+  print('Registering new root: %s' % value)
+  register_path_detector(FixedPathDetector(value))
+
+
+def register_options(app):
+  from apache.thermos.common.constants import DEFAULT_CHECKPOINT_ROOT
+
+  print('Registering --root option.')
+
+  app.add_option(
+      '--root',
+      dest='root',
+      metavar='PATH',
+      type='string',
+      default=DEFAULT_CHECKPOINT_ROOT,
+      action='callback',
+      callback=register_root,
+      help="the thermos config root")
+
+
+register_commands(app)
+register_options(app)
+
+
+proxy_main = app.main
+
+
+proxy_main()

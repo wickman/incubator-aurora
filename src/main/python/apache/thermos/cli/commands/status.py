@@ -8,6 +8,7 @@ import time
 
 from twitter.common import app
 
+from apache.thermos.cli.common import get_path_detector
 from apache.thermos.common.ckpt import CheckpointDispatcher
 from apache.thermos.monitoring.detector import TaskDetector
 
@@ -28,9 +29,10 @@ def status(args, options):
       --verbosity=LEVEL     Verbosity level for logging. [default: 0]
       --only=TYPE	    Only print tasks of TYPE (options: active finished)
   """
-  detector = TaskDetector(root=options.root)
+  path_detector = get_path_detector()
 
-  def format_task(task_id):
+  def format_task(root, task_id):
+    detector = TaskDetector(root)
     checkpoint_filename = detector.get_checkpoint(task_id)
     checkpoint_stat = os.stat(checkpoint_filename)
     try:
@@ -69,28 +71,35 @@ def status(args, options):
       print()
 
   matchers = map(re.compile, args or ['.*'])
-  active = [t_id for _, t_id in detector.get_task_ids(state='active')
-            if any(pattern.match(t_id) for pattern in matchers)]
-  finished = [t_id for _, t_id in detector.get_task_ids(state='finished')
-              if any(pattern.match(t_id) for pattern in matchers)]
+
+  active = []
+  finished = []
+
+  for root in path_detector.get_paths():
+    print('Found root: %s' % root)
+    detector = TaskDetector(root)
+    active.extend((root, t_id) for _, t_id in detector.get_task_ids(state='active')
+        if any(pattern.match(t_id) for pattern in matchers))
+    finished.extend((root, t_id)for _, t_id in detector.get_task_ids(state='finished')
+        if any(pattern.match(t_id) for pattern in matchers))
 
   found = False
   if options.only is None or options.only == 'active':
     if active:
       print('Active tasks:')
       found = True
-      for task_id in active:
-        format_task(task_id)
+      for root, task_id in active:
+        format_task(root, task_id)
       print()
 
   if options.only is None or options.only == 'finished':
     if finished:
       print('Finished tasks:')
       found = True
-      for task_id in finished:
-        format_task(task_id)
+      for root, task_id in finished:
+        format_task(root, task_id)
       print()
 
   if not found:
-    print('No tasks found in root [%s]' % options.root)
+    print('No tasks found.')
     sys.exit(1)
