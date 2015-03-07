@@ -1,0 +1,21 @@
+digraph G {
+  ACTIVE -> CLEANING -> FINALIZING;   
+
+  FINALIZING -> SUCCESS;
+  FINALIZING -> FAILED;
+  FINALIZING -> KILLED;
+  FINALIZING -> LOST;
+
+  ACTIVE -> KILLED;
+  ACTIVE -> LOST;
+
+  CLEANING -> KILLED;
+  CLEANING -> LOST;
+
+  ACTIVE [style=dashed];
+  SUCCESS [peripheries=2];
+  FAILED [peripheries=2];
+  KILLED [peripheries=2];
+  LOST [peripheries=2];
+}
+

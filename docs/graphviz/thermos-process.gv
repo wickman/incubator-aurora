@@ -1,0 +1,14 @@
+digraph G {
+  WAITING -> FORKED -> RUNNING -> KILLED;
+  WAITING -> FAILED;
+  RUNNING -> FAILED;
+  FORKED -> LOST;
+  RUNNING -> LOST;
+  RUNNING -> SUCCESS;
+
+  WAITING [style=dashed];
+  FAILED [peripheries=2];
+  KILLED [peripheries=2];
+  SUCCESS [peripheries=2];
+  LOST [peripheries=2];
+}
