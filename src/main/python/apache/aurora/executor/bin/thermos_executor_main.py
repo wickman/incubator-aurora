@@ -20,6 +20,7 @@ slave.
 """
 
 import os
+from contextlib import contextmanager
 
 from twitter.common import app, log
 from twitter.common.log.options import LogOptions
@@ -40,6 +41,12 @@ try:
   from mesos.native import MesosExecutorDriver
 except ImportError:
   MesosExecutorDriver = None
+
+try:
+  from compactor.context import Context as CompactorContext
+  from pesos.executor import PesosExecutorDriver
+except ImportError:
+  PesosExecutorDriver = None
 
 
 CWD = os.environ.get('MESOS_SANDBOX', '.')
@@ -122,11 +129,20 @@ class UserOverrideDirectorySandboxProvider(DefaultSandboxProvider):
     return self._user_override
 
 
+@contextmanager
+def make_driver(executor):
+  if MesosExecutorDriver:
+    yield MesosExecutorDriver(executor)
+  elif PesosExecutorDriver:
+    context = CompactorContext.singleton()
+    yield PesosExecutorDriver(executor, context=context)
+    context.stop()
+  else:
+    app.error('Could not find a suitable driver to launch the executor!')
+
+
 def proxy_main():
   def main(args, options):
-    if MesosExecutorDriver is None:
-      app.error('Could not load MesosExecutorDriver!')
-
     # status providers:
     status_providers = [
         HealthCheckerProvider(),
@@ -165,15 +181,14 @@ def proxy_main():
       )
 
     # Create driver stub
-    driver = MesosExecutorDriver(thermos_executor)
+    with make_driver(thermos_executor) as driver:
+      # This is an ephemeral executor -- shutdown if we receive no tasks within a certain
+      # time period
+      ExecutorTimeout(thermos_executor.launched, driver).start()
 
-    # This is an ephemeral executor -- shutdown if we receive no tasks within a certain
-    # time period
-    ExecutorTimeout(thermos_executor.launched, driver).start()
+      # Start executor
+      driver.run()
 
-    # Start executor
-    driver.run()
-
-    log.info('MesosExecutorDriver.run() has finished.')
+    log.info('Driver finished.')
 
   app.main()

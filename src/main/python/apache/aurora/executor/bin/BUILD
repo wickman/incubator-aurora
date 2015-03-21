@@ -45,6 +45,16 @@ python_binary(
   ]
 )
 
+python_binary(
+  name = 'thermos_executor_pesos',
+  entry_point = 'apache.aurora.executor.bin.thermos_executor_main:proxy_main',
+  always_write_cache = True,
+  dependencies = [
+    '3rdparty/python:pesos',
+    ':thermos_executor_source',
+  ]
+)
+
 python_library(
   name = 'gc_executor_source',
   sources = ['gc_executor_main.py'],
