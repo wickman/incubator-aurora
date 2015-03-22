@@ -131,12 +131,12 @@ class UserOverrideDirectorySandboxProvider(DefaultSandboxProvider):
 
 @contextmanager
 def make_driver(executor):
-  if MesosExecutorDriver:
-    yield MesosExecutorDriver(executor)
-  elif PesosExecutorDriver:
+  if PesosExecutorDriver:
     context = CompactorContext.singleton()
     yield PesosExecutorDriver(executor, context=context)
     context.stop()
+  elif MesosExecutorDriver:
+    yield MesosExecutorDriver(executor)
   else:
     app.error('Could not find a suitable driver to launch the executor!')
 

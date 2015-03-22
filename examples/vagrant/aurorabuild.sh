@@ -60,9 +60,12 @@ function build_scheduler {
 
 function build_executor {
   ./pants binary src/main/python/apache/aurora/executor/bin:gc_executor
-  ./pants binary src/main/python/apache/aurora/executor/bin:thermos_executor_pesos
+  # If you would like to run in pesos mode, build the following:
+  # ./pants binary src/main/python/apache/aurora/executor/bin:thermos_executor_pesos
+  # mv -f dist/thermos_executor_pesos.pex dist/thermos_executor.pex
+  ./pants binary src/main/python/apache/aurora/executor/bin:thermos_executor
   ./pants binary src/main/python/apache/thermos/bin:thermos_runner
-  mv -f dist/thermos_executor_pesos.pex dist/thermos_executor.pex
+
 
   # Package runner within executor.
   python <<EOF
