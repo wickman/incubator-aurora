@@ -12,8 +12,10 @@
 # limitations under the License.
 #
 
-from mesos.interface import Executor, mesos_pb2
+from mesos.interface import Executor
 from twitter.common import log
+
+from .common.interface import mesos_pb2
 
 
 class ExecutorBase(Executor):

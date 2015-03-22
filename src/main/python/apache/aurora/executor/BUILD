@@ -18,7 +18,6 @@ python_library(
   name = 'thermos_task_runner',
   sources = ['thermos_task_runner.py'],
   dependencies = [
-    '3rdparty/python:mesos.interface',
     # To prevent an alpha version of protobuf from being pulled down by pants we
     # specify protobuf here. See AURORA-1128 for more details.
     '3rdparty/python:protobuf',
@@ -30,6 +29,7 @@ python_library(
     'src/main/python/apache/thermos/core',
     'src/main/python/apache/thermos/monitoring:monitor',
     'src/main/python/apache/aurora/common:http_signaler',
+    'src/main/python/apache/aurora/executor/common:interface',
     'src/main/python/apache/aurora/executor/common:status_checker',
     'src/main/python/apache/aurora/executor/common:task_info',
     'src/main/python/apache/aurora/executor/common:task_runner',
@@ -65,11 +65,11 @@ python_library(
   name = 'executor_base',
   sources = ['executor_base.py'],
   dependencies = [
-    '3rdparty/python:mesos.interface',
     # To prevent an alpha version of protobuf from being pulled down by pants we
     # specify protobuf here. See AURORA-1128 for more details.
     '3rdparty/python:protobuf',
     '3rdparty/python:twitter.common.log',
+    'src/main/python/apache/aurora/executor/common:interface',
   ]
 )
 
@@ -79,7 +79,6 @@ python_library(
   dependencies = [
     ':status_manager',
     ':executor_base',
-    '3rdparty/python:mesos.interface',
     # To prevent an alpha version of protobuf from being pulled down by pants we
     # specify protobuf here. See AURORA-1128 for more details.
     '3rdparty/python:protobuf',
@@ -88,6 +87,7 @@ python_library(
     '3rdparty/python:twitter.common.concurrent',
     '3rdparty/python:twitter.common.log',
     '3rdparty/python:twitter.common.quantity',
+    'src/main/python/apache/aurora/executor/common:interface',
     'src/main/python/apache/aurora/executor/common:kill_manager',
     'src/main/python/apache/aurora/executor/common:sandbox',
     'src/main/python/apache/aurora/executor/common:task_info',
@@ -101,7 +101,6 @@ python_library(
   sources = ['gc_executor.py'],
   dependencies = [
     ':executor_base',
-    '3rdparty/python:mesos.interface',
     # To prevent an alpha version of protobuf from being pulled down by pants we
     # specify protobuf here. See AURORA-1128 for more details.
     '3rdparty/python:protobuf',
@@ -119,6 +118,7 @@ python_library(
     'src/main/python/apache/thermos/monitoring:garbage',
     'src/main/python/apache/aurora/config:schema',
     'src/main/python/apache/aurora/executor/common:executor_detector',
+    'src/main/python/apache/aurora/executor/common:interface',
     'src/main/python/apache/aurora/executor/common:sandbox',
     'api/src/main/thrift/org/apache/aurora/gen:py-thrift',
     'api/src/main/thrift/org/apache/thermos:py-thrift',

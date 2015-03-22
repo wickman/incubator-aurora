@@ -13,8 +13,8 @@
 #
 
 import mock
-from mesos.interface import mesos_pb2
 
+from apache.aurora.executor.common.interface import mesos_pb2
 from apache.aurora.executor.common.resource_manager import ResourceManager
 from apache.thermos.config.schema import Resources
 from apache.thermos.monitoring.process import ProcessSample

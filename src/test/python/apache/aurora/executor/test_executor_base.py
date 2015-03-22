@@ -15,9 +15,10 @@
 from unittest import TestCase
 
 import mock
-from mesos.interface import ExecutorDriver, mesos_pb2
+from mesos.interface import ExecutorDriver
 from twitter.common import log
 
+from apache.aurora.executor.common.interface import mesos_pb2
 from apache.aurora.executor.executor_base import ExecutorBase
 
 

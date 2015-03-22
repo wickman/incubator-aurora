@@ -23,7 +23,6 @@ import sys
 import threading
 import time
 
-from mesos.interface import mesos_pb2
 from twitter.common import log
 from twitter.common.dirutil import safe_mkdtemp
 from twitter.common.log.options import LogOptions
@@ -42,6 +41,7 @@ from apache.thermos.config.loader import ThermosTaskWrapper
 from apache.thermos.core import runner as core
 from apache.thermos.monitoring.monitor import TaskMonitor
 
+from .common.interface import mesos_pb2
 from .common.status_checker import StatusResult
 from .common.task_info import mesos_task_instance_from_assigned_task, resolve_ports
 from .common.task_runner import TaskError, TaskRunner, TaskRunnerProvider

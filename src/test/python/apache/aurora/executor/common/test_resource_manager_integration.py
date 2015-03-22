@@ -16,9 +16,9 @@ import os
 import threading
 
 import mock
-from mesos.interface import mesos_pb2
 from twitter.common.contextutil import temporary_dir
 
+from apache.aurora.executor.common.interface import mesos_pb2
 from apache.aurora.executor.common.resource_manager import ResourceManagerProvider
 from apache.aurora.executor.common.sandbox import DirectorySandbox
 from apache.thermos.common.path import TaskPath

@@ -14,8 +14,7 @@
 
 from unittest import TestCase
 
-from mesos.interface import mesos_pb2
-
+from apache.aurora.executor.common.interface import mesos_pb2
 from apache.aurora.executor.common.kill_manager import KillManager
 
 

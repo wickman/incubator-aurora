@@ -16,12 +16,12 @@ import threading
 import time
 import traceback
 
-from mesos.interface import mesos_pb2
 from twitter.common import log
 from twitter.common.concurrent import deadline, defer, Timeout
 from twitter.common.metrics import Observable
 from twitter.common.quantity import Amount, Time
 
+from .common.interface import mesos_pb2
 from .common.kill_manager import KillManager
 from .common.sandbox import DefaultSandboxProvider
 from .common.status_checker import ChainedStatusChecker

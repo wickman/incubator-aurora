@@ -82,12 +82,12 @@ python_tests(name = 'thermos_executor',
 python_tests(name = 'thermos_task_runner',
   sources = ['test_thermos_task_runner.py'],
   dependencies = [
-    '3rdparty/python:mesos.interface',
     '3rdparty/python:twitter.common.contextutil',
     '3rdparty/python:twitter.common.dirutil',
     '3rdparty/python:twitter.common.log',
     '3rdparty/python:twitter.common.quantity',
     'src/main/python/apache/aurora/config:schema',
+    'src/main/python/apache/aurora/executor/common:interface',
     'src/main/python/apache/aurora/executor/common:sandbox',
     'src/main/python/apache/aurora/executor:thermos_task_runner',
   ]
@@ -96,19 +96,19 @@ python_tests(name = 'thermos_task_runner',
 python_tests(name = 'executor_base',
   sources = ['test_executor_base.py'],
   dependencies = [
-    '3rdparty/python:mesos.interface',
     '3rdparty/python:mock',
     '3rdparty/python:twitter.common.log',
     'src/main/python/apache/aurora/executor:executor_base',
+    'src/main/python/apache/aurora/executor/common:interface',
   ],
 )
 
 python_tests(name = 'status_manager',
   sources = ['test_status_manager.py'],
   dependencies = [
-    '3rdparty/python:mesos.interface',
     '3rdparty/python:mock',
     'src/main/python/apache/aurora/executor:status_manager',
+    'src/main/python/apache/aurora/executor/common:interface',
     'src/main/python/apache/aurora/executor/common:status_checker',
   ],
 )

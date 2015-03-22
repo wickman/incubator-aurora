@@ -23,7 +23,6 @@ from collections import namedtuple
 from itertools import product
 
 import mock
-from mesos.interface import mesos_pb2
 from thrift.TSerialization import serialize as thrift_serialize
 from twitter.common import log
 from twitter.common.concurrent import deadline, Timeout
@@ -32,6 +31,7 @@ from twitter.common.dirutil import safe_rmtree
 from twitter.common.quantity import Amount, Time
 from twitter.common.testing.clock import ThreadedClock
 
+from apache.aurora.executor.common.interface import mesos_pb2
 from apache.aurora.executor.gc_executor import RootedTask, ThermosGCExecutor
 from apache.thermos.common.path import TaskPath
 from apache.thermos.config.schema import SimpleTask

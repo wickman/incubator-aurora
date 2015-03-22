@@ -21,7 +21,6 @@ import sys
 import tempfile
 import time
 
-from mesos.interface import mesos_pb2
 from twitter.common import log
 from twitter.common.contextutil import temporary_dir
 from twitter.common.dirutil import safe_rmtree
@@ -29,6 +28,7 @@ from twitter.common.log.options import LogOptions
 from twitter.common.quantity import Amount, Time
 
 from apache.aurora.config.schema.base import MB, MesosTaskInstance, Process, Resources, Task
+from apache.aurora.executor.common.interface import mesos_pb2
 from apache.aurora.executor.common.sandbox import DirectorySandbox
 from apache.aurora.executor.thermos_task_runner import ThermosTaskRunner
 from apache.thermos.common.statuses import (

@@ -17,13 +17,13 @@ import threading
 import time
 import traceback
 
-from mesos.interface.mesos_pb2 import TaskState
 from twitter.common import log
 from twitter.common.exceptions import ExceptionalThread
 from twitter.common.metrics import LambdaGauge
 
 from apache.aurora.common.http_signaler import HttpSignaler
 
+from .interface import mesos_pb2
 from .status_checker import StatusChecker, StatusCheckerProvider, StatusResult
 from .task_info import mesos_task_instance_from_assigned_task, resolve_ports
 
@@ -185,7 +185,7 @@ class HealthChecker(StatusChecker):
   def status(self):
     if not self.threaded_health_checker.healthy:
       return StatusResult('Failed health check! %s' % self.threaded_health_checker.reason,
-          TaskState.Value('TASK_FAILED'))
+          mesos_pb2.TaskState.Value('TASK_FAILED'))
 
   def name(self):
     return 'health_checker'

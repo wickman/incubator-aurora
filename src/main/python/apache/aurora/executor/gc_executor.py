@@ -26,7 +26,6 @@ import time
 from collections import namedtuple
 
 import psutil
-from mesos.interface import mesos_pb2
 from thrift.TSerialization import deserialize as thrift_deserialize
 from twitter.common.collections import OrderedDict
 from twitter.common.exceptions import ExceptionalThread
@@ -42,6 +41,7 @@ from apache.thermos.monitoring.detector import PathDetector, TaskDetector
 from apache.thermos.monitoring.garbage import TaskGarbageCollector
 
 from .common.executor_detector import ExecutorDetector
+from .common.interface import mesos_pb2
 from .common.sandbox import DirectorySandbox
 from .executor_base import ExecutorBase
 

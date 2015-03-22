@@ -14,8 +14,7 @@
 
 import threading
 
-from mesos.interface.mesos_pb2 import TaskState
-
+from apache.aurora.executor.common.interface import mesos_pb2
 from apache.aurora.executor.common.status_checker import (
     ChainedStatusChecker,
     Healthy,
@@ -62,11 +61,11 @@ def test_chained_health_interface():
     assert si.started.is_set()
 
   assert chained_si.status is None
-  reason = StatusResult('derp', TaskState.Value('TASK_FAILED'))
+  reason = StatusResult('derp', mesos_pb2.TaskState.Value('TASK_FAILED'))
   si2.set_status(reason)
   assert chained_si.status == reason
   assert chained_si.status.reason == 'derp'
-  assert TaskState.Name(chained_si.status.status) == 'TASK_FAILED'
+  assert mesos_pb2.TaskState.Name(chained_si.status.status) == 'TASK_FAILED'
 
   for si in (si1, si2):
     assert not si.stopped.is_set()

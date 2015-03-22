@@ -18,7 +18,6 @@ import time
 import unittest
 
 import mock
-from mesos.interface.mesos_pb2 import TaskState
 from twitter.common.exceptions import ExceptionalThread
 from twitter.common.testing.clock import ThreadedClock
 
@@ -29,6 +28,7 @@ from apache.aurora.executor.common.health_checker import (
     HealthCheckerProvider,
     ThreadedHealthChecker
 )
+from apache.aurora.executor.common.interface import mesos_pb2
 from apache.aurora.executor.common.sandbox import SandboxInterface
 
 from .fixtures import HELLO_WORLD, MESOS_JOB
@@ -66,7 +66,7 @@ class TestHealthChecker(unittest.TestCase):
     assert hct.status is None
     self._clock.tick(5)
     assert self._clock.converge(threads=[hct.threaded_health_checker])
-    assert hct.status.status == TaskState.Value('TASK_FAILED')
+    assert hct.status.status == mesos_pb2.TaskState.Value('TASK_FAILED')
     hct.stop()
     assert self._checker.health.call_count == 1
 
@@ -80,7 +80,7 @@ class TestHealthChecker(unittest.TestCase):
     hct.start()
     self._clock.converge(threads=[hct.threaded_health_checker])
     self._clock.assert_waiting(hct.threaded_health_checker, amount=5)
-    assert hct.status.status == TaskState.Value('TASK_FAILED')
+    assert hct.status.status == mesos_pb2.TaskState.Value('TASK_FAILED')
     hct.stop()
     # this is an implementation detail -- we healthcheck in the initializer and
     # healthcheck in the run loop.  if we ever change the implementation, expect
@@ -135,7 +135,7 @@ class TestHealthChecker(unittest.TestCase):
     self._clock.tick(interval_secs + epsilon)
     self._clock.converge(threads=[hct.threaded_health_checker])
     self._clock.assert_waiting(hct.threaded_health_checker, amount=1)
-    assert hct.status.status == TaskState.Value('TASK_FAILED')
+    assert hct.status.status == mesos_pb2.TaskState.Value('TASK_FAILED')
     assert hct.metrics.sample()['consecutive_failures'] == 3
     hct.stop()
     assert self._checker.health.call_count == 6

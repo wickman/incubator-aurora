@@ -19,7 +19,6 @@ from abc import abstractmethod
 
 from kazoo.client import KazooClient
 from kazoo.retry import KazooRetry
-from mesos.interface import mesos_pb2
 from twitter.common import log
 from twitter.common.concurrent.deferred import defer
 from twitter.common.exceptions import ExceptionalThread
@@ -27,6 +26,7 @@ from twitter.common.metrics import LambdaGauge, Observable
 from twitter.common.quantity import Amount, Time
 from twitter.common.zookeeper.serverset import Endpoint, ServerSet
 
+from apache.aurora.executor.common.interface import mesos_pb2
 from apache.aurora.executor.common.status_checker import (
     StatusChecker,
     StatusCheckerProvider,

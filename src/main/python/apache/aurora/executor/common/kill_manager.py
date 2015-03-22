@@ -12,8 +12,7 @@
 # limitations under the License.
 #
 
-from mesos.interface.mesos_pb2 import TaskState
-
+from .interface import mesos_pb2
 from .status_checker import StatusChecker, StatusResult
 
 
@@ -29,7 +28,7 @@ class KillManager(StatusChecker):
   @property
   def status(self):
     if self._killed:
-      return StatusResult(self._reason, TaskState.Value('TASK_KILLED'))
+      return StatusResult(self._reason, mesos_pb2.TaskState.Value('TASK_KILLED'))
 
   def name(self):
     return 'kill_manager'

@@ -80,11 +80,11 @@ python_tests(
   sources = ['test_health_checker.py'],
   dependencies = [
     ':fixtures',
-    '3rdparty/python:mesos.interface',
     '3rdparty/python:mock',
     '3rdparty/python:twitter.common.testing',
     'src/main/python/apache/aurora/common:http_signaler',
     'src/main/python/apache/aurora/executor/common:health_checker',
+    'src/main/python/apache/aurora/executor/common:interface',
     'src/main/python/apache/aurora/executor/common:sandbox',
     'api/src/main/thrift/org/apache/aurora/gen:py-thrift',
   ]
@@ -94,7 +94,7 @@ python_tests(
   name = 'status_checker',
   sources = ['test_status_checker.py'],
   dependencies = [
-    '3rdparty/python:mesos.interface',
+    'src/main/python/apache/aurora/executor/common:interface',
     'src/main/python/apache/aurora/executor/common:status_checker',
   ]
 )
@@ -103,7 +103,7 @@ python_tests(
   name = 'kill_manager',
   sources = ['test_kill_manager.py'],
   dependencies = [
-    '3rdparty/python:mesos.interface',
+    'src/main/python/apache/aurora/executor/common:interface',
     'src/main/python/apache/aurora/executor/common:kill_manager',
     'src/main/python/apache/aurora/executor/common:status_checker',
   ],
@@ -123,10 +123,10 @@ python_tests(
   name = 'executor_timeout',
   sources = ['test_executor_timeout.py'],
   dependencies = [
-    '3rdparty/python:mesos.interface',
     '3rdparty/python:mock',
     '3rdparty/python:twitter.common.quantity',
     'src/main/python/apache/aurora/executor/common:executor_timeout',
+    'src/main/python/apache/aurora/executor/common:interface',
   ],
 )
 
@@ -146,12 +146,12 @@ python_tests(
   name = 'resource_manager_integration',
   sources = [ 'test_resource_manager_integration.py' ],
   dependencies = [
-    '3rdparty/python:mesos.interface',
     '3rdparty/python:mock',
     '3rdparty/python:twitter.common.contextutil',
     '3rdparty/python:twitter.common.dirutil',
     'api/src/main/thrift/org/apache/aurora/gen:py-thrift',
     'src/main/python/apache/aurora/config:schema',
+    'src/main/python/apache/aurora/executor/common:interface',
     'src/main/python/apache/aurora/executor/common:sandbox',
     'src/main/python/apache/aurora/executor/common:resource_manager',
     'src/main/python/apache/thermos/core:helper',

@@ -14,10 +14,11 @@
 
 from abc import abstractmethod, abstractproperty
 
-from mesos.interface.mesos_pb2 import TaskState
 from twitter.common import log
 from twitter.common.lang import Interface
 from twitter.common.metrics import Observable
+
+from .interface import mesos_pb2
 
 
 class StatusResult(object):
@@ -31,7 +32,7 @@ class StatusResult(object):
 
   def __init__(self, reason, status):
     self._reason = reason
-    if status not in TaskState.values():
+    if status not in mesos_pb2.TaskState.values():
       raise ValueError('Unknown task state: %r' % status)
     self._status = status
 
@@ -47,7 +48,7 @@ class StatusResult(object):
     return '%s(%r, status=%r)' % (
         self.__class__.__name__,
         self._reason,
-        TaskState.Name(self._status))
+        mesos_pb2.TaskState.Name(self._status))
 
 
 class StatusChecker(Observable, Interface):

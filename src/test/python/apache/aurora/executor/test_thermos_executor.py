@@ -24,7 +24,6 @@ from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 from collections import defaultdict
 
 import mock
-from mesos.interface import mesos_pb2
 from thrift.TSerialization import serialize
 from twitter.common import log
 from twitter.common.contextutil import temporary_dir
@@ -45,6 +44,7 @@ from apache.aurora.config.schema.base import (
 from apache.aurora.executor.aurora_executor import AuroraExecutor
 from apache.aurora.executor.common.executor_timeout import ExecutorTimeout
 from apache.aurora.executor.common.health_checker import HealthCheckerProvider
+from apache.aurora.executor.common.interface import mesos_pb2
 from apache.aurora.executor.common.sandbox import DirectorySandbox, SandboxProvider
 from apache.aurora.executor.common.status_checker import ChainedStatusChecker
 from apache.aurora.executor.common.task_runner import TaskError
