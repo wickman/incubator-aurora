@@ -14,9 +14,10 @@
 
 from __future__ import print_function
 
+import datetime
 import json
 import textwrap
-import time
+from collections import namedtuple
 
 from apache.aurora.client.base import combine_messages
 from apache.aurora.client.cli import (
@@ -37,16 +38,14 @@ from apache.aurora.client.cli.options import (
     HEALTHCHECK_OPTION,
     INSTANCES_SPEC_ARGUMENT,
     JOBSPEC_ARGUMENT,
-    JOBSPEC_OPTION,
     JSON_READ_OPTION,
     JSON_WRITE_OPTION,
-    ROLE_OPTION,
     STRICT_OPTION
 )
 from apache.aurora.common.aurora_job_key import AuroraJobKey
 
 from gen.apache.aurora.api.constants import ACTIVE_JOB_UPDATE_STATES
-from gen.apache.aurora.api.ttypes import JobUpdateAction, JobUpdateStatus
+from gen.apache.aurora.api.ttypes import JobUpdateAction, JobUpdateKey, JobUpdateStatus
 
 
 class UpdateController(object):
@@ -100,6 +99,10 @@ class UpdateController(object):
         "Update has been aborted.")
 
 
+def format_timestamp(stamp_millis):
+  return datetime.datetime.utcfromtimestamp(stamp_millis / 1000).isoformat()
+
+
 MESSAGE_OPTION = CommandOption(
     '--message',
     '-m',
@@ -131,9 +134,8 @@ class StartUpdate(Verb):
   @property
   def help(self):
     return textwrap.dedent("""\
-        Start a scheduler-driven rolling upgrade on a running job, using the update
-        configuration within the config file as a control for update velocity and failure
-        tolerance.
+        Start a rolling update of a running job, using the update configuration within the config
+        file as a control for update velocity and failure tolerance.
 
         The updater only takes action on instances in a job that have changed, meaning
         that changing a single instance will only induce a restart on the changed task instance.
@@ -175,7 +177,7 @@ class PauseUpdate(Verb):
 
   @property
   def help(self):
-    return """Pause a scheduler-driven rolling update."""
+    return """Pause an update."""
 
   def execute(self, context):
     job_key = context.options.jobspec
@@ -194,7 +196,7 @@ class ResumeUpdate(Verb):
 
   @property
   def help(self):
-    return """Resume a paused scheduler-driven rolling update."""
+    return """Resume an update."""
 
   def execute(self, context):
     job_key = context.options.jobspec
@@ -213,7 +215,7 @@ class AbortUpdate(Verb):
 
   @property
   def help(self):
-    return """Abort an in-progress scheduler-driven rolling update."""
+    return """Abort an in-progress update."""
 
   def execute(self, context):
     job_key = context.options.jobspec
@@ -222,85 +224,169 @@ class AbortUpdate(Verb):
         context.options.message)
 
 
+UpdateFilter = namedtuple('UpdateFilter', ['cluster', 'role', 'env', 'job'])
+
+
 class ListUpdates(Verb):
+  @staticmethod
+  def update_filter(filter_str):
+    if filter_str is None or filter_str == '':
+      raise ValueError('Update filter must be non-empty')
+    parts = filter_str.split('/')
+    if len(parts) == 0 or len(parts) > 4:
+      raise ValueError('Update filter must be a path of the form CLUSTER/ROLE/ENV/JOB.')
+    # Pad with None.
+    parts = parts + ([None] * (4 - len(parts)))
+    return UpdateFilter(
+        cluster=parts[0],
+        role=parts[1],
+        env=parts[2],
+        job=parts[3])
+
   @property
   def name(self):
     return 'list'
 
+  STATUS_GROUPS = dict({
+      'active': ACTIVE_JOB_UPDATE_STATES,
+      'all': set(JobUpdateStatus._VALUES_TO_NAMES.keys()),
+      'blocked': {
+          JobUpdateStatus.ROLL_FORWARD_AWAITING_PULSE, JobUpdateStatus.ROLL_BACK_AWAITING_PULSE},
+      'failed': {JobUpdateStatus.ERROR, JobUpdateStatus.FAILED, JobUpdateStatus.ROLLED_BACK},
+      'inactive': set(JobUpdateStatus._VALUES_TO_NAMES.keys()) - ACTIVE_JOB_UPDATE_STATES,
+      'paused': {JobUpdateStatus.ROLL_FORWARD_PAUSED, JobUpdateStatus.ROLL_BACK_PAUSED},
+      'succeeded': {JobUpdateStatus.ROLLED_FORWARD},
+  }.items() + [(k, {v}) for k, v in JobUpdateStatus._NAMES_TO_VALUES.items()])
+
   def get_options(self):
     return [
-      JOBSPEC_OPTION,
-      ROLE_OPTION,
+      CommandOption(
+          'filter',
+          type=self.update_filter,
+          metavar="CLUSTER[/ROLE[/ENV[/JOB]]]",
+          help=('A path-like specifier for the scope of updates to list.')),
+      CommandOption(
+          "--status",
+          choices=self.STATUS_GROUPS,
+          default=[],
+          action="append",
+          help="""Update state to filter by. This may be specified multiple times, in which case
+updates matching any of the specified statuses will be included."""),
       CommandOption("--user", default=None, metavar="username",
           help="The name of the user who initiated the update"),
-      CommandOption("--status", choices=JobUpdateStatus._NAMES_TO_VALUES,
-          default=None,
-          action="append", help="Set of update statuses to search for"),
-      JSON_WRITE_OPTION,
-      CommandOption("cluster", metavar="clustername",
-          help="Cluster to search for matching updates")]
+      JSON_WRITE_OPTION
+    ]
 
   @property
   def help(self):
-    return textwrap.dedent("""\
-        List all scheduler-driven jobs updates, with summary info, about active updates
-        that match a query.
-        """)
+    return "List summaries of job updates."
+
+  COLUMNS = [
+    ('JOB', 47),
+    ('UPDATE ID', 36),
+    ('STATUS', 15),
+    ('CREATED BY', 11),
+    ('STARTED', 19),
+    ('LAST MODIFIED', 19)
+  ]
+  FORMAT_STR = ' '.join(["{%d:%d}" % (i, col[1]) for i, col in enumerate(COLUMNS)])
+  HEADER = FORMAT_STR.format(*[c[0] for c in COLUMNS])
 
   def execute(self, context):
-    cluster = context.options.cluster
+    update_filter = context.options.filter
+    cluster = update_filter.cluster
+    if (update_filter.role is not None
+        and update_filter.env is not None
+        and update_filter.job is not None):
+
+      job_key = AuroraJobKey(
+          cluster=cluster,
+          role=update_filter.role,
+          env=update_filter.env,
+          name=update_filter.job)
+    else:
+      job_key = None
+
     api = context.get_api(cluster)
+
+    filter_statuses = set()
+    for status in context.options.status:
+      filter_statuses = filter_statuses.union(set(self.STATUS_GROUPS[status]))
+
     response = api.query_job_updates(
-        role=context.options.role,
-        job_key=context.options.jobspec,
-        user=context.options.user,
-        update_statuses=context.options.status)
+        role=update_filter.role if job_key is None else None,
+        job_key=job_key,
+        update_statuses=filter_statuses if filter_statuses else None,
+        user=context.options.user)
     context.log_response_and_raise(response)
+
+    # The API does not offer a way to query by environment, so if that filter is requested, we
+    # perform a more broad role-based query and filter here.
+    summaries = response.result.getJobUpdateSummariesResult.updateSummaries
+    if job_key is None and update_filter.env is not None:
+      summaries = [s for s in summaries if s.key.job.environment == update_filter.env]
+
     if context.options.write_json:
       result = []
-      for summary in response.result.getJobUpdateSummariesResult.updateSummaries:
+      for summary in summaries:
         job_entry = {
-            "jobkey": AuroraJobKey.from_thrift(cluster, summary.key.job).to_path(),
+            "job": AuroraJobKey.from_thrift(cluster, summary.key.job).to_path(),
             "id": summary.key.id,
             "user": summary.user,
-            "started": summary.state.createdTimestampMs,
-            "lastModified": summary.state.lastModifiedTimestampMs,
+            "started": format_timestamp(summary.state.createdTimestampMs),
+            "lastModified": format_timestamp(summary.state.lastModifiedTimestampMs),
             "status": JobUpdateStatus._VALUES_TO_NAMES[summary.state.status]
         }
         result.append(job_entry)
       context.print_out(json.dumps(result, indent=2, separators=[',', ': '], sort_keys=False))
     else:
-      for summary in response.result.getJobUpdateSummariesResult.updateSummaries:
-        created = summary.state.createdTimestampMs
-        lastMod = summary.state.lastModifiedTimestampMs
-        context.print_out("Job: %s, Id: %s, User: %s, Status: %s" % (
+      if summaries:
+        context.print_out(self.HEADER)
+      for summary in summaries:
+        context.print_out(self.FORMAT_STR.format(
             AuroraJobKey.from_thrift(cluster, summary.key.job).to_path(),
             summary.key.id,
+            JobUpdateStatus._VALUES_TO_NAMES[summary.state.status],
             summary.user,
-            JobUpdateStatus._VALUES_TO_NAMES[summary.state.status]))
-        context.print_out("Created: %s, Last Modified %s" % (created, lastMod), indent=2)
+            format_timestamp(summary.state.createdTimestampMs),
+            format_timestamp(summary.state.lastModifiedTimestampMs))
+        )
     return EXIT_OK
 
 
-class UpdateStatus(Verb):
+class UpdateInfo(Verb):
+
+  UPDATE_ID_ARGUMENT = CommandOption(
+      'id',
+      type=str,
+      nargs='?',
+      metavar='ID',
+      help='Update identifier provided by the scheduler when an update was started.')
+
   @property
   def name(self):
-    return 'status'
+    return 'info'
 
   def get_options(self):
-    return [JSON_WRITE_OPTION, JOBSPEC_ARGUMENT]
+    return [JSON_WRITE_OPTION, JOBSPEC_ARGUMENT, self.UPDATE_ID_ARGUMENT]
 
   @property
   def help(self):
-    return """Display detailed status information about a scheduler-driven in-progress update."""
+    return """Display detailed status information about a scheduler-driven in-progress update.
+
+        If no update ID is provided, information will be displayed about the active
+        update for the job."""
 
   def execute(self, context):
-    key = UpdateController(
-        context.get_api(context.options.jobspec.cluster),
-        context).get_update_key(context.options.jobspec)
-    if key is None:
-      context.print_err("No updates found for job %s" % context.options.jobspec)
-      return EXIT_INVALID_PARAMETER
+    if context.options.id:
+      key = JobUpdateKey(job=context.options.jobspec.to_thrift(), id=context.options.id)
+    else:
+      key = UpdateController(
+          context.get_api(context.options.jobspec.cluster),
+          context).get_update_key(context.options.jobspec)
+      if key is None:
+        context.print_err("There is no active update for this job.")
+        return EXIT_INVALID_PARAMETER
 
     api = context.get_api(context.options.jobspec.cluster)
     response = api.get_job_update_details(key)
@@ -339,14 +425,11 @@ class UpdateStatus(Verb):
       context.print_out(json.dumps(result, indent=2, separators=[',', ': '], sort_keys=False))
 
     else:
-      def timestamp(time_ms):
-        return time.ctime(time_ms / 1000)
-
       context.print_out("Job: %s, UpdateID: %s" % (context.options.jobspec,
           details.update.summary.key.id))
       context.print_out("Started %s, last activity: %s" %
-          (timestamp(details.update.summary.state.createdTimestampMs),
-          timestamp(details.update.summary.state.lastModifiedTimestampMs)))
+          (format_timestamp(details.update.summary.state.createdTimestampMs),
+          format_timestamp(details.update.summary.state.lastModifiedTimestampMs)))
       context.print_out("Current status: %s" %
           JobUpdateStatus._VALUES_TO_NAMES[details.update.summary.state.status])
       update_events = details.updateEvents
@@ -355,7 +438,7 @@ class UpdateStatus(Verb):
         for event in update_events:
           context.print_out("Status: %s at %s" % (
               JobUpdateStatus._VALUES_TO_NAMES[event.status],
-              timestamp(event.timestampMs)
+              format_timestamp(event.timestampMs)
           ), indent=2)
           if event.message:
             context.print_out("  message: %s" % event.message, indent=4)
@@ -364,7 +447,7 @@ class UpdateStatus(Verb):
         context.print_out("Instance events:")
         for event in instance_events:
           context.print_out("Instance %s at %s: %s" % (
-            event.instanceId, timestamp(event.timestampMs),
+            event.instanceId, format_timestamp(event.timestampMs),
             JobUpdateAction._VALUES_TO_NAMES[event.action]
           ), indent=2)
     return EXIT_OK
@@ -391,4 +474,4 @@ class Update(Noun):
     self.register_verb(ResumeUpdate())
     self.register_verb(AbortUpdate())
     self.register_verb(ListUpdates())
-    self.register_verb(UpdateStatus())
+    self.register_verb(UpdateInfo())
