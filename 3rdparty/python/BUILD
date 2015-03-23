@@ -11,10 +11,3 @@
 # limitations under the License.
 #
 python_requirements()
-
-python_requirement_library(
-  name = 'pesos',
-  requirements = [
-    python_requirement('pesos==0.2.0-dev0'),
-  ]
-)
