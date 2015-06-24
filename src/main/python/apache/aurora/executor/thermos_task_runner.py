@@ -44,6 +44,7 @@ from apache.thermos.monitoring.monitor import TaskMonitor
 from .common.status_checker import StatusResult
 from .common.task_info import mesos_task_instance_from_assigned_task, resolve_ports
 from .common.task_runner import TaskError, TaskRunner, TaskRunnerProvider
+from .http_lifecycle import HTTPLifecycleManager
 
 from gen.apache.thermos.ttypes import TaskState
 
@@ -111,21 +112,6 @@ class ThermosTaskRunner(TaskRunner):
         ThermosTaskWrapper(self._task).to_file(self._task_filename)
     except ThermosTaskWrapper.InvalidTask as e:
       raise TaskError('Failed to load task: %s' % e)
-
-  def _terminate_http(self):
-    if 'health' not in self._ports:
-      return
-
-    http_signaler = HttpSignaler(self._ports['health'])
-
-    for exit_endpoint in [
-        self._task.graceful_shutdown_endpoint().get(),
-        self._task.shutdown_endpoint().get()]:
-      handled, _ = http_signaler(exit_endpoint, use_post_method=True)
-      if handled:
-        self._clock.sleep(self.ESCALATION_WAIT.as_(Time.SECONDS))
-        if self.status is not None:
-          return
 
   @property
   def artifact_dir(self):
@@ -318,9 +304,6 @@ class ThermosTaskRunner(TaskRunner):
     if not self.forking.is_set():
       raise TaskError('Failed to call TaskRunner.start.')
 
-    log.info('Invoking runner HTTP teardown.')
-    self._terminate_http()
-
     log.info('Invoking runner.kill')
     self.kill()
 
@@ -387,7 +370,7 @@ class DefaultThermosTaskRunnerProvider(TaskRunnerProvider):
       POLL_INTERVAL = self._poll_interval
       THERMOS_PREEMPTION_WAIT = self._preemption_wait
 
-    return ProvidedThermosTaskRunner(
+    runner = ProvidedThermosTaskRunner(
         self._pex_location,
         task_id,
         mesos_task.task(),
@@ -398,6 +381,8 @@ class DefaultThermosTaskRunnerProvider(TaskRunnerProvider):
         artifact_dir=self._artifact_dir,
         clock=self._clock,
         hostname=assigned_task.slaveHost)
+
+    return HTTPLifecycleManager.wrap(runner, mesos_task, assigned_task.assignedPorts)
 
 
 class UserOverrideThermosTaskRunnerProvider(DefaultThermosTaskRunnerProvider):
