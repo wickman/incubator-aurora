@@ -23,6 +23,8 @@ from .common.task_runner import TaskError, TaskRunner
 
 
 class HTTPLifecycleManager(TaskRunner):
+  """A wrapper around a TaskRunner that performs HTTP lifecycle management."""
+
   ESCALATION_WAIT = Amount(5, Time.SECONDS)
 
   @classmethod
