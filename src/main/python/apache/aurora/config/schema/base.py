@@ -45,6 +45,25 @@ class HealthCheckConfig(Struct):
   expected_response_code   = Default(Integer, 0)
 
 
+class HTTPLifecycleConfig(Struct):
+  # Named port to POST shutdown endpoints
+  port = Default(String, 'health')
+
+  # Endpoint to hit to indicate that a task should gracefully shutdown.
+  graceful_shutdown_endpoint = Default(String, '/quitquitquit')
+
+  # Endpoint to hit to give a task it's final warning before being killed.
+  shutdown_endpoint = Default(String, '/abortabortabort')
+
+
+class LifecycleConfig(Struct):
+  http = HTTPLifecycleConfig
+
+
+DisableLifecycle = LifecycleConfig()
+DefaultLifecycleConfig = LifecycleConfig(http = HTTPLifecycleConfig())
+
+
 class Announcer(Struct):
   primary_port = Default(String, 'http')
 
@@ -98,6 +117,8 @@ class MesosJob(Struct):
   production                 = Default(Boolean, False)
   priority                   = Default(Integer, 0)
   health_check_config        = Default(HealthCheckConfig, HealthCheckConfig())
+  # TODO(wickman) Make Default(Any, LifecycleConfig()) once pystachio #17 is addressed.
+  lifecycle                  = Default(LifecycleConfig, DefaultLifecycleConfig)
   task_links                 = Map(String, String)  # Unsupported.  See AURORA-739
 
   enable_hooks = Default(Boolean, False)  # enable client API hooks; from env python-list 'hooks'

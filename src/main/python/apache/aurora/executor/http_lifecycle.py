@@ -28,15 +28,24 @@ class HTTPLifecycleManager(TaskRunner):
 
   @classmethod
   def wrap(cls, runner, job, assigned_ports):
+    """Return a task runner that manages the http lifecycle if lifecycle is present."""
+
     portmap = resolve_ports(job, assigned_ports)
-    if portmap and 'health' in portmap:
-      escalation_endpoints = [
-          job.lifecycle().graceful_shutdown_endpoint().get(),
-          job.lifecycle().shutdown_endpoint().get()
-      ]
-      return cls(runner, 'health', escalation_endpoints)
-    else:
+
+    if not job.has_lifecycle() or not job.lifecycle().has_http_lifecycle():
       return runner
+
+    http_lifecycle = job.lifecycle().http_lifecycle()
+    http_lifecycle_port = http_lifecycle.port().get()
+
+    if not portmap or http_lifecycle_port not in portmap:
+      return runner
+
+    escalation_endpoints = [
+        http_lifecycle.graceful_shutdown_endpoint().get(),
+        http_lifecycle.shutdown_endpoint().get()
+    ]
+    return cls(runner, portmap[http_lifecycle_port], escalation_endpoints)
 
   def __init__(self,
                runner,
