@@ -382,7 +382,7 @@ class DefaultThermosTaskRunnerProvider(TaskRunnerProvider):
         clock=self._clock,
         hostname=assigned_task.slaveHost)
 
-    return HTTPLifecycleManager.wrap(runner, mesos_task, assigned_task.assignedPorts)
+    return HTTPLifecycleManager.wrap(runner, mesos_task, mesos_ports)
 
 
 class UserOverrideThermosTaskRunnerProvider(DefaultThermosTaskRunnerProvider):

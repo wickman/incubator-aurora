@@ -19,7 +19,6 @@ from twitter.common.quantity import Amount, Time
 
 from apache.aurora.common.http_signaler import HttpSignaler
 
-from .common.task_info import resolve_ports
 from .common.task_runner import TaskError, TaskRunner
 
 
@@ -27,18 +26,19 @@ class HTTPLifecycleManager(TaskRunner):
   ESCALATION_WAIT = Amount(5, Time.SECONDS)
 
   @classmethod
-  def wrap(cls, runner, job, assigned_ports):
+  def wrap(cls, runner, task_instance, portmap):
     """Return a task runner that manages the http lifecycle if lifecycle is present."""
 
-    portmap = resolve_ports(job, assigned_ports)
-
-    if not job.has_lifecycle() or not job.lifecycle().has_http_lifecycle():
+    if not task_instance.has_lifecycle() or not task_instance.lifecycle().has_http():
       return runner
 
-    http_lifecycle = job.lifecycle().http_lifecycle()
+    http_lifecycle = task_instance.lifecycle().http()
     http_lifecycle_port = http_lifecycle.port().get()
 
     if not portmap or http_lifecycle_port not in portmap:
+      # If DefaultLifecycle is ever to disable task lifecycle by default, we should
+      # raise a TaskError here, since the user has requested http lifecycle without
+      # binding a port to send lifecycle commands.
       return runner
 
     escalation_endpoints = [

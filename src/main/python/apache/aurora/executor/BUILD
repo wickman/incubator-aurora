@@ -32,6 +32,7 @@ python_library(
     'src/main/python/apache/aurora/executor/common:status_checker',
     'src/main/python/apache/aurora/executor/common:task_info',
     'src/main/python/apache/aurora/executor/common:task_runner',
+    ':http_lifecycle',
   ]
 )
 
@@ -55,7 +56,6 @@ python_library(
     '3rdparty/python:twitter.common.log',
     '3rdparty/python:twitter.common.quantity',
     'src/main/python/apache/aurora/common:http_signaler',
-    'src/main/python/apache/aurora/executor/common:task_info',
     'src/main/python/apache/aurora/executor/common:task_runner',
   ]
 )

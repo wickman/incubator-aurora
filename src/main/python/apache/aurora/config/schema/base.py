@@ -80,12 +80,13 @@ class Announcer(Struct):
 
 # The executorConfig populated inside of TaskConfig.
 class MesosTaskInstance(Struct):
-  task                       = Required(Task)
-  instance                   = Required(Integer)
-  role                       = Required(String)
-  announce                   = Announcer
-  environment                = Required(String)
-  health_check_config        = Default(HealthCheckConfig, HealthCheckConfig())
+  task                = Required(Task)
+  instance            = Required(Integer)
+  role                = Required(String)
+  announce            = Announcer
+  environment         = Required(String)
+  health_check_config = Default(HealthCheckConfig, HealthCheckConfig())
+  lifecycle           = LifecycleConfig
 
 
 class Docker(Struct):
@@ -124,6 +125,7 @@ class MesosJob(Struct):
   enable_hooks = Default(Boolean, False)  # enable client API hooks; from env python-list 'hooks'
 
   container = Container
+
 
 Job = MesosJob
 Service = Job(service = True)
